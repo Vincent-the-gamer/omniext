@@ -31,7 +31,8 @@ const unlockCopy: FeatureDefinition = {
       zh: '只在确实选中文字时拦截 mouseup，不影响页面本身的点击操作。',
     },
   ],
-  defaultEnabled: true,
+  // 首次安装时所有开关都是关闭的，由用户主动开启。
+  defaultEnabled: false,
   createRuntime: createUnlockCopyRuntime,
 };
 

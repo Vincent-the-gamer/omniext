@@ -48,6 +48,11 @@ export function useFeatures() {
     // 写入前归一化（统一写法、去重），保证存下来的规则完整、可复用。
     const settings = normalizeSettings({ ...row.settings, ...patch }, row.feature);
     row.settings = settings;
+
+    // 全局功能（例如 WebRTC 的 IP 策略）直接在这里应用到浏览器，
+    // 不依赖后台服务工作线程是否已经唤醒；后台的 watch 也会再确认一次。
+    row.feature.applySettings?.(settings);
+
     await featureSettings(row.feature).setValue(settings);
   }
 

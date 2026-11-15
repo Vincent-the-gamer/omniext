@@ -64,22 +64,43 @@ function isActiveHere(settings: FeatureSettings): boolean {
     return isFeatureActive(settings, hostname.value);
 }
 
-function statusOf(settings: FeatureSettings): string {
+/** 全局功能（如 WebRTC 的 IP 策略）不按域名区分，开关就是浏览器级别的。 */
+function isGlobal(row: FeatureRow): boolean {
+    return row.feature.global === true;
+}
+
+function statusOf(row: FeatureRow): string {
+    const settings = row.settings;
     if (!settings.enabled) return t("status-off");
+    if (isGlobal(row)) return t("status-active-global");
     if (!hostname.value) return t("status-not-applicable");
     return isActiveHere(settings) ? t("status-active") : t("status-paused");
 }
 
-function statusTone(settings: FeatureSettings): string {
+function statusTone(row: FeatureRow): string {
+    const settings = row.settings;
     if (!settings.enabled) return "off";
+    if (isGlobal(row)) return "on";
     if (!hostname.value) return "muted";
     return isActiveHere(settings) ? "on" : "paused";
 }
 
-function scopeLabel(settings: FeatureSettings): string {
+function scopeLabel(row: FeatureRow): string {
+    if (isGlobal(row)) return t("scope-global");
+    const settings = row.settings;
     if (settings.scope === "whitelist") return t("scope-whitelist");
     if (settings.scope === "blacklist") return t("scope-blacklist");
     return t("scope-all");
+}
+
+/** 全局功能当前选中的模式，例如 WebRTC 的 IP 策略。 */
+function modeLabel(row: FeatureRow): string {
+    const option = row.feature.options?.[0];
+    if (!option) return "";
+
+    const value = row.settings.options?.[option.key] ?? option.default;
+    const choice = option.values.find((item) => item.value === value);
+    return choice ? localized(choice.label, locale.value) : value;
 }
 
 /** 当前域名命中的规则，只显示真正起作用的那些。 */
@@ -210,14 +231,19 @@ async function openOptions(): Promise<void> {
                     <div class="feature__meta">
                         <span
                             class="state"
-                            :class="`state--${statusTone(row.settings)}`"
+                            :class="`state--${statusTone(row)}`"
                         >
-                            {{ statusOf(row.settings) }}
+                            {{ statusOf(row) }}
                         </span>
                         <span class="dot" aria-hidden="true">·</span>
-                        <span class="scope">{{
-                            scopeLabel(row.settings)
-                        }}</span>
+                        <span class="scope">{{ scopeLabel(row) }}</span>
+                        <span
+                            v-if="isGlobal(row) && modeLabel(row)"
+                            class="chip chip--accent"
+                            :title="localized(row.feature.options?.[0]?.label ?? '', locale)"
+                        >
+                            {{ modeLabel(row) }}
+                        </span>
                         <span
                             v-for="rule in hitRules(row.settings)"
                             :key="rule"
@@ -227,6 +253,7 @@ async function openOptions(): Promise<void> {
                         </span>
                         <span
                             v-if="
+                                !isGlobal(row) &&
                                 row.settings.scope !== 'all' &&
                                 hitRules(row.settings).length === 0
                             "
@@ -236,7 +263,11 @@ async function openOptions(): Promise<void> {
                         </span>
 
                         <button
-                            v-if="hostname && row.settings.enabled"
+                            v-if="
+                                hostname &&
+                                row.settings.enabled &&
+                                !isGlobal(row)
+                            "
                             class="link feature__action"
                             type="button"
                             @click="toggleHere(row)"

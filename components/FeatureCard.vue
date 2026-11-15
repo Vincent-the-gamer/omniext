@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import RuleEditor from "@/components/RuleEditor.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
 import { useLocale } from "@/composables/use-locale";
@@ -59,6 +59,71 @@ const scopeHint = computed(
 const rulesInactive = computed(
     () => props.settings.scope === "all" && props.settings.rules.length > 0,
 );
+
+/** 全局功能（如 WebRTC 的 IP 策略）没有域名规则，只有浏览器级开关。 */
+const isGlobal = computed(() => props.feature.global === true);
+
+/** 浏览器里该功能的真实状态，用来确认改动是否落地。 */
+const browserState = ref<Record<string, string>>({});
+let stateTimer: number | undefined;
+
+function refreshBrowserState(): void {
+    const read = props.feature.readBrowserState;
+    if (!read) return;
+
+    // 稍等一下再读，避免刚写入就读到旧值而产生误报。
+    window.clearTimeout(stateTimer);
+    stateTimer = window.setTimeout(async () => {
+        try {
+            browserState.value = await read();
+        } catch {
+            browserState.value = {};
+        }
+    }, 400);
+}
+
+onMounted(refreshBrowserState);
+watch(() => props.settings, refreshBrowserState);
+
+/** 功能自带的可选参数（下拉菜单）。 */
+const options = computed(() =>
+    (props.feature.options ?? []).map((option) => {
+        const selected = props.settings.options?.[option.key] ?? option.default;
+        const actual = browserState.value[option.key];
+        const actualLabel = option.values.find(
+            (value) => value.value === actual,
+        )?.label;
+
+        return {
+            key: option.key,
+            label: localized(option.label, locale.value),
+            note: option.note ? localized(option.note, locale.value) : "",
+            default: option.default,
+            values: option.values.map((value) => ({
+                value: value.value,
+                label: localized(value.label, locale.value),
+            })),
+            mismatch:
+                actual && actual !== selected
+                    ? t(
+                        "policy-mismatch",
+                        {
+                            value: actualLabel
+                                ? localized(actualLabel, locale.value)
+                                : actual,
+                        },
+                    )
+                    : "",
+        };
+    }),
+);
+
+function setOption(key: string, event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    emit("change", {
+        options: { ...props.settings.options, [key]: select.value },
+    });
+}
 </script>
 
 <template>
@@ -97,6 +162,7 @@ const rulesInactive = computed(
                 <span class="field-label">{{ t("scope") }}</span>
                 <div>
                     <div
+                        v-if="!isGlobal"
                         class="segmented"
                         role="radiogroup"
                         :aria-label="t('scope-of', { name })"
@@ -113,11 +179,13 @@ const rulesInactive = computed(
                             {{ scope.label }}
                         </button>
                     </div>
-                    <p class="hint">{{ scopeHint }}</p>
+                    <p class="hint">
+                        {{ isGlobal ? t("hint-global") : scopeHint }}
+                    </p>
                 </div>
             </div>
 
-            <div class="feature__row">
+            <div v-if="!isGlobal" class="feature__row">
                 <span class="field-label">{{ t("domain-rules") }}</span>
                 <div>
                     <RuleEditor
@@ -130,6 +198,31 @@ const rulesInactive = computed(
                                 count: settings.rules.length,
                             })
                         }}
+                    </p>
+                </div>
+            </div>
+
+            <div v-if="options.length > 0" class="feature__row">
+                <span class="field-label">{{ t("feature-options") }}</span>
+                <div class="option" v-for="option in options" :key="option.key">
+                    <span class="option__label">{{ option.label }}</span>
+                    <select
+                        class="select"
+                        :aria-label="option.label"
+                        :value="settings.options?.[option.key] ?? option.default"
+                        @change="setOption(option.key, $event)"
+                    >
+                        <option
+                            v-for="choice in option.values"
+                            :key="choice.value"
+                            :value="choice.value"
+                        >
+                            {{ choice.label }}
+                        </option>
+                    </select>
+                    <p v-if="option.note" class="hint">{{ option.note }}</p>
+                    <p v-if="option.mismatch" class="error">
+                        {{ option.mismatch }}
                     </p>
                 </div>
             </div>
@@ -233,6 +326,16 @@ const rulesInactive = computed(
     border-radius: 50%;
     background: var(--accent);
     opacity: 0.75;
+}
+
+.option {
+    display: grid;
+    gap: 6px;
+}
+
+.option__label {
+    color: var(--text-muted);
+    font-size: 12.5px;
 }
 
 @media (min-width: 820px) {
