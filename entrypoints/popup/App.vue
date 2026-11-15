@@ -238,7 +238,7 @@ async function openOptions(): Promise<void> {
                         <span class="dot" aria-hidden="true">·</span>
                         <span class="scope">{{ scopeLabel(row) }}</span>
                         <span
-                            v-if="isGlobal(row) && modeLabel(row)"
+                            v-if="isGlobal(row) && row.settings.enabled && modeLabel(row)"
                             class="chip chip--accent"
                             :title="localized(row.feature.options?.[0]?.label ?? '', locale)"
                         >

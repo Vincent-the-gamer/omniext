@@ -8,37 +8,30 @@ Omnipotent browser extension.
 ## Abilities
 
 - Unlock any copy limitation.
-- Disable WebRTC entirely, so a site cannot read your real or local IP address.
+- Limit WebRTC's network paths, so a site cannot read your real or local IP address.
 
 and soon...
 
 ## WebRTC protection
 
-`Disable WebRTC` blocks WebRTC on two levels, so nothing leaks:
-
-1. **Page level** — before a site's own scripts run, the content script removes
-   `RTCPeerConnection`, `RTCSessionDescription`, `MediaStreamTrack`, `MediaStream`,
-   `RTCDataChannel`, `getUserMedia` and `navigator.mediaDevices` from the page (in
-   every frame). A site cannot open a WebRTC connection, and video/audio capture
-   through WebRTC is gone too.
-2. **Browser level** — Chrome's `webRTCIPHandlingPolicy`, the same mechanism as
-   Google's *WebRTC Network Limiter*, is tightened. This covers what the page
-   patch cannot reach, such as Web Workers and other tabs. While the switch is on
-   you pick one of four modes:
+`WebRTC Network Limiter` is a straight copy of Google's extension of the same
+name: it only changes Chrome's built-in `webRTCIPHandlingPolicy`, the setting that
+decides which network addresses WebRTC is allowed to use. Pick one of the four
+modes, exactly as the original does:
 
 | Mode | Effect |
 | --- | --- |
-| No restriction | Browser default — WebRTC behaves normally. |
-| Default public + private interfaces | WebRTC uses the default public address plus local addresses. |
-| Public IP only | Only the default public interface is used; LAN addresses stay hidden. |
-| Proxy only (default) | WebRTC UDP is disabled unless it goes through a proxy, so a leak test finds no WebRTC IP at all. |
+| Give me the best media experience | Browser default — Chrome explores every network path, so leak tests still see your real and local IP. |
+| Use my default public and private IP addresses | Media follows the same path as normal web traffic (plus the default private address behind a NAT). |
+| Use only my default public IP address | Same as above, but the private default address is not used — LAN addresses stay hidden. |
+| Use my proxy server (if present) | Media always goes through the proxy; with no proxy WebRTC has no network path at all. This is the strictest mode and stops the leak. |
 
-The browser-level policy is browser-wide — it applies to every tab, not just the
-domains in your rules, so this feature has no domain rules. Turning the switch off
-restores both the page APIs and the browser default.
+The policy is browser-wide — it applies to every tab, not just the domains in your
+rules, so this feature has no domain rules. Turning the switch off restores the
+browser default, so nothing is left behind.
 
-Disabling WebRTC also breaks WebRTC apps such as Meet, Zoom or Discord — turn the
-switch off when you need them.
+The strict modes also break WebRTC apps such as Meet, Zoom or Discord. The panel
+shows the value Chrome actually reports, so you can confirm the change landed.
 
 ## Preview
 

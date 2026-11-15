@@ -65,6 +65,7 @@ const isGlobal = computed(() => props.feature.global === true);
 
 /** 浏览器里该功能的真实状态，用来确认改动是否落地。 */
 const browserState = ref<Record<string, string>>({});
+const stateRead = ref(false);
 let stateTimer: number | undefined;
 
 function refreshBrowserState(): void {
@@ -79,11 +80,20 @@ function refreshBrowserState(): void {
         } catch {
             browserState.value = {};
         }
+        stateRead.value = true;
     }, 400);
 }
 
 onMounted(refreshBrowserState);
 watch(() => props.settings, refreshBrowserState);
+
+/** 浏览器没有这个隐私 API（例如 Firefox）时给出提示。 */
+const policyUnsupported = computed(
+    () =>
+        Boolean(props.feature.readBrowserState) &&
+        stateRead.value &&
+        Object.keys(browserState.value).length === 0,
+);
 
 /** 功能自带的可选参数（下拉菜单）。 */
 const options = computed(() =>
@@ -93,18 +103,25 @@ const options = computed(() =>
         const actualLabel = option.values.find(
             (value) => value.value === actual,
         )?.label;
+        const chosen = option.values.find((value) => value.value === selected);
 
         return {
             key: option.key,
             label: localized(option.label, locale.value),
             note: option.note ? localized(option.note, locale.value) : "",
             default: option.default,
+            // 选中项的完整说明，和浏览器原生的策略描述一致。
+            selectedDescription: chosen?.description
+                ? localized(chosen.description, locale.value)
+                : "",
             values: option.values.map((value) => ({
                 value: value.value,
                 label: localized(value.label, locale.value),
             })),
             mismatch:
-                actual && actual !== selected
+                // 开关关闭时浏览器回到默认策略，所以实际值应当是 default。
+                actual &&
+                actual !== (props.settings.enabled ? selected : "default")
                     ? t(
                         "policy-mismatch",
                         {
@@ -220,7 +237,13 @@ function setOption(key: string, event: Event): void {
                             {{ choice.label }}
                         </option>
                     </select>
+                    <p v-if="option.selectedDescription" class="option__detail">
+                        {{ option.selectedDescription }}
+                    </p>
                     <p v-if="option.note" class="hint">{{ option.note }}</p>
+                    <p v-if="policyUnsupported" class="error">
+                        {{ t("policy-not-supported") }}
+                    </p>
                     <p v-if="option.mismatch" class="error">
                         {{ option.mismatch }}
                     </p>
@@ -336,6 +359,12 @@ function setOption(key: string, event: Event): void {
 .option__label {
     color: var(--text-muted);
     font-size: 12.5px;
+}
+
+.option__detail {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
 }
 
 @media (min-width: 820px) {

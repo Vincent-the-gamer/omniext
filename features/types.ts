@@ -39,7 +39,12 @@ export interface FeatureOption {
   /** 用户没有改动时的默认值。 */
   default: string;
   /** 可选值，顺序就是界面里的顺序。 */
-  values: readonly { value: string; label: LocalizedText }[];
+  values: readonly {
+    value: string;
+    label: LocalizedText;
+    /** 选中这个值时显示的完整说明。 */
+    description?: LocalizedText;
+  }[];
   /** 菜单下方的一句话说明。 */
   note?: LocalizedText;
 }

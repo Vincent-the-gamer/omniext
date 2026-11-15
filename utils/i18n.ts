@@ -79,6 +79,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'rule-hint': 'example.com also matches all of its subdomains; IPs can be written as 192.168.1.10 or 192.168.1.*.',
     'feature-options': 'Extra options',
     'policy-mismatch': 'The browser currently reports “{value}”, so the change did not take effect. Toggle the switch off and on again.',
+    'policy-not-supported': 'This browser does not offer Chrome’s WebRTC IP policy, so the mode selector has no effect here.',
   },
   zh: {
     settings: '设置',
@@ -128,6 +129,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'rule-hint': 'example.com 会同时命中它的所有子域名；IP 可写成 192.168.1.10 或 192.168.1.*。',
     'feature-options': '额外选项',
     'policy-mismatch': '浏览器当前实际策略是“{value}”，说明改动没有落地；请把开关关闭再打开一次。',
+    'policy-not-supported': '当前浏览器没有 Chrome 的 WebRTC IP 策略设置，这里的选择不会生效。',
   },
 };
 
