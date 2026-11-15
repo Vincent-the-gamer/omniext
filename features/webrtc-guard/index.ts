@@ -1,5 +1,5 @@
 import type { FeatureDefinition } from '@/features/types';
-import { applyWebRtcIpPolicy, getWebRtcIpPolicy } from './policy';
+import { applyWebRtcIpPolicy, readWebRtcIpState } from './policy';
 
 /**
  * WebRTC 防护：完全复刻 Google 的 "WebRTC Network Limiter"（官方插件，
@@ -39,6 +39,10 @@ const webrtcGuard: FeatureDefinition = {
     {
       en: 'Strict modes break WebRTC apps such as Meet, Zoom or Discord. The panel shows the value Chrome actually reports, so you can confirm the change landed.',
       zh: '严格模式会让 Meet、Zoom、Discord 这类 WebRTC 应用无法连接。面板会显示浏览器当前实际生效的策略，方便确认改动已经落地。',
+    },
+    {
+      en: 'If the panel says the policy is unavailable, the extension is missing the `privacy` permission — usually because Chrome is still running an older copy. Reload the extension in chrome://extensions, then turn the switch on again. If Chrome reports the setting is “not controllable”, a command-line flag or an enterprise policy is fixing the value, and no extension can change it.',
+      zh: '如果面板说这个策略不可用，说明扩展没有 `privacy` 权限 —— 通常是 Chrome 还在运行旧版本。请在 chrome://extensions 里重新加载扩展，再把开关打开。如果 Chrome 表示该设置“不可控制”，说明是启动参数或企业策略锁定了这个值，任何扩展都改不动它。',
     },
   ],
   options: [
@@ -91,11 +95,8 @@ const webrtcGuard: FeatureDefinition = {
   // 首次安装时所有开关都是关闭的，由用户主动开启。
   defaultEnabled: false,
   applySettings: applyWebRtcIpPolicy,
-  // 界面用真实值确认策略是否落地（浏览器不支持时会提示）。
-  readBrowserState: async (): Promise<Record<string, string>> => {
-    const value = await getWebRtcIpPolicy();
-    return value ? { ipPolicy: value } : {};
-  },
+  // 界面用真实值确认策略是否落地；不支持或被锁定时都会给出具体原因。
+  readBrowserState: readWebRtcIpState,
 };
 
 export default webrtcGuard;

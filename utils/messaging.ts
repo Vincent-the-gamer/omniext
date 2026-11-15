@@ -16,3 +16,20 @@ export function isPageInfoRequest(message: unknown): boolean {
     (message as { type?: unknown }).type === PAGE_INFO_MESSAGE
   );
 }
+
+/** 界面询问某个全局功能在浏览器里的真实状态（由后台回答）。 */
+export const BROWSER_STATE_MESSAGE = 'omniext:browser-state';
+
+/** 后台对 `BROWSER_STATE_MESSAGE` 的应答，见 `features/types.ts` 的 `BrowserState`。 */
+export interface BrowserStateRequest {
+  type: typeof BROWSER_STATE_MESSAGE;
+  featureId: string;
+}
+
+export function isBrowserStateRequest(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    (message as { type?: unknown }).type === BROWSER_STATE_MESSAGE
+  );
+}

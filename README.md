@@ -33,6 +33,13 @@ browser default, so nothing is left behind.
 The strict modes also break WebRTC apps such as Meet, Zoom or Discord. The panel
 shows the value Chrome actually reports, so you can confirm the change landed.
 
+If the panel says the policy is unavailable, the running copy of the extension does
+not have the `privacy` permission — Chrome is usually still executing an older
+build, so reload the extension in `chrome://extensions`. If Chrome reports a control
+level of `not_controllable`, a command-line flag or an enterprise policy owns the
+value and no extension can change it. The **Re-apply the policy** button writes the
+value again and reads it back.
+
 ## Preview
 
 ![preview](preview/preview.png)

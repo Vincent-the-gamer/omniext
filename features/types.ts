@@ -49,6 +49,26 @@ export interface FeatureOption {
   note?: LocalizedText;
 }
 
+/**
+ * 全局功能在浏览器里的真实状态，界面用它确认改动是否真的落地。
+ */
+export interface BrowserState {
+  /** 浏览器是否提供对应的 API（Firefox 没有 WebRTC 的 IP 策略）。 */
+  supported: boolean;
+  /** 浏览器当前真实生效的选项值，键名与 `options` 的键一致。 */
+  values: Record<string, string>;
+  /**
+   * Chrome 的 `ChromeSetting` 控制级别：
+   * `controllable_by_this_extension` / `controlled_by_other_extensions` /
+   * `not_controllable`（由启动参数或企业策略设定，扩展改不动）。
+   */
+  levelOfControl?: string;
+  /** 读取失败时的原始错误信息，便于界面给出具体原因。 */
+  error?: string;
+  /** 扩展当前 manifest 里声明的权限，排查“API 不可用”时很有用。 */
+  permissions?: string[];
+}
+
 /** 一个功能（插件能力）的完整描述。 */
 export interface FeatureDefinition {
   /** 稳定 ID，同时用作设置存储的键后缀，不要随意改动。 */
@@ -83,12 +103,12 @@ export interface FeatureDefinition {
    */
   applySettings?: (settings: FeatureSettings) => void;
   /**
-   * 可选：读取浏览器里该功能对应的真实状态，键名与 `options` 的键一致。
+   * 可选：读取浏览器里该功能对应的真实状态（见 `BrowserState`）。
    *
-   * 界面用它确认全局设置是否真的落地（例如 WebRTC 的 IP 策略被浏览器拒绝时
-   * 给出提示）。
+   * 界面用它确认全局设置是否真的落地：浏览器没有这个 API、或者这个值被
+   * 启动参数/企业策略锁定时，都会给出明确的提示而不是假装生效。
    */
-  readBrowserState?: () => Promise<Record<string, string>>;
+  readBrowserState?: () => Promise<BrowserState>;
   /**
    * 创建该功能在当前页面的运行实例。
    *

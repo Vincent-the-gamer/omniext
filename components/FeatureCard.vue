@@ -3,8 +3,9 @@ import { computed, onMounted, ref, watch } from "vue";
 import RuleEditor from "@/components/RuleEditor.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
 import { useLocale } from "@/composables/use-locale";
-import type { FeatureDefinition } from "@/features/types";
+import type { BrowserState, FeatureDefinition } from "@/features/types";
 import type { FeatureScope, FeatureSettings } from "@/utils/feature-settings";
+import { readFeatureBrowserState } from "@/utils/browser-state";
 import { localized } from "@/utils/i18n";
 
 const props = defineProps<{
@@ -63,43 +64,97 @@ const rulesInactive = computed(
 /** 全局功能（如 WebRTC 的 IP 策略）没有域名规则，只有浏览器级开关。 */
 const isGlobal = computed(() => props.feature.global === true);
 
-/** 浏览器里该功能的真实状态，用来确认改动是否落地。 */
-const browserState = ref<Record<string, string>>({});
+/** 全局功能在浏览器里的真实状态，用来确认改动是否落地。 */
+const browserState = ref<BrowserState>({ supported: true, values: {} });
 const stateRead = ref(false);
 let stateTimer: number | undefined;
 
-function refreshBrowserState(): void {
-    const read = props.feature.readBrowserState;
-    if (!read) return;
+function readState(): void {
+    const feature = props.feature;
+    if (!feature.readBrowserState) return;
 
     // 稍等一下再读，避免刚写入就读到旧值而产生误报。
     window.clearTimeout(stateTimer);
     stateTimer = window.setTimeout(async () => {
         try {
-            browserState.value = await read();
-        } catch {
-            browserState.value = {};
+            browserState.value = await readFeatureBrowserState(feature);
+        } catch (error) {
+            browserState.value = {
+                supported: false,
+                values: {},
+                error: error instanceof Error ? error.message : String(error),
+            };
         }
         stateRead.value = true;
     }, 400);
 }
 
-onMounted(refreshBrowserState);
-watch(() => props.settings, refreshBrowserState);
+/** 重新写入浏览器策略并读回，用于排查“设置没有生效”。 */
+function reapplyPolicy(): void {
+    props.feature.applySettings?.(props.settings);
+    readState();
+}
 
-/** 浏览器没有这个隐私 API（例如 Firefox）时给出提示。 */
-const policyUnsupported = computed(
-    () =>
-        Boolean(props.feature.readBrowserState) &&
-        stateRead.value &&
-        Object.keys(browserState.value).length === 0,
+onMounted(() => {
+    // 后台服务 worker 可能没有运行（MV3 会随时卸载它），所以面板打开时
+    // 再应用一次，保证开关开启期间浏览器策略确实是选中的值。
+    if (isGlobal.value && props.settings.enabled && props.feature.applySettings) {
+        reapplyPolicy();
+    } else {
+        readState();
+    }
+});
+watch(() => props.settings, readState);
+
+/** 状态读到了才提示，否则不凭空判断。 */
+const stateAvailable = computed(
+    () => Boolean(props.feature.readBrowserState) && stateRead.value,
 );
+
+/** 浏览器没有这个 API（例如 Firefox），或扩展缺少所需权限。 */
+const policyUnsupported = computed(
+    () => stateAvailable.value && !browserState.value.supported,
+);
+
+/** 值被 Chrome 的启动参数或企业策略锁定：API 存在，但扩展改不动。 */
+const policyLocked = computed(
+    () =>
+        stateAvailable.value &&
+        browserState.value.supported &&
+        browserState.value.levelOfControl === "not_controllable",
+);
+
+/** 浏览器当前真实生效的策略，用菜单里的名称显示。 */
+const actualPolicyLabel = computed(() => {
+    const option = props.feature.options?.[0];
+    if (!option) return "";
+
+    const actual = browserState.value.values[option.key];
+    const label = option.values.find(
+        (value) => value.value === actual,
+    )?.label;
+
+    return label ? localized(label, locale.value) : actual;
+});
+
+/** 一行真实状态：当前值 + 控制级别，出问题时还能带上原始错误。 */
+const policyStatus = computed(() => {
+    if (!stateAvailable.value || !browserState.value.supported) return "";
+
+    const value = actualPolicyLabel.value || t("policy-unknown");
+    const control = browserState.value.levelOfControl ?? "unknown";
+    const detail = browserState.value.error
+        ? ` (${browserState.value.error})`
+        : "";
+
+    return t("policy-current", { value, control }) + detail;
+});
 
 /** 功能自带的可选参数（下拉菜单）。 */
 const options = computed(() =>
     (props.feature.options ?? []).map((option) => {
         const selected = props.settings.options?.[option.key] ?? option.default;
-        const actual = browserState.value[option.key];
+        const actual = browserState.value.values[option.key];
         const actualLabel = option.values.find(
             (value) => value.value === actual,
         )?.label;
@@ -120,7 +175,9 @@ const options = computed(() =>
             })),
             mismatch:
                 // 开关关闭时浏览器回到默认策略，所以实际值应当是 default。
+                // 被启动参数/企业策略锁定时不是“没落地”，由 policyLocked 说明。
                 actual &&
+                !policyLocked.value &&
                 actual !== (props.settings.enabled ? selected : "default")
                     ? t(
                         "policy-mismatch",
@@ -241,12 +298,45 @@ function setOption(key: string, event: Event): void {
                         {{ option.selectedDescription }}
                     </p>
                     <p v-if="option.note" class="hint">{{ option.note }}</p>
+                    <p v-if="policyStatus" class="hint">{{ policyStatus }}</p>
                     <p v-if="policyUnsupported" class="error">
                         {{ t("policy-not-supported") }}
+                    </p>
+                    <p
+                        v-if="
+                            policyUnsupported &&
+                            browserState.permissions?.length
+                        "
+                        class="hint"
+                    >
+                        {{
+                            t("policy-permissions", {
+                                permissions: browserState.permissions.join(
+                                    ", ",
+                                ),
+                            })
+                        }}
+                    </p>
+                    <p v-if="policyLocked" class="error">
+                        {{
+                            t("policy-locked", {
+                                value: actualPolicyLabel || t("policy-unknown"),
+                                control:
+                                    browserState.levelOfControl ?? "unknown",
+                            })
+                        }}
                     </p>
                     <p v-if="option.mismatch" class="error">
                         {{ option.mismatch }}
                     </p>
+                    <button
+                        v-if="isGlobal && feature.applySettings"
+                        type="button"
+                        class="btn btn--ghost btn--sm"
+                        @click="reapplyPolicy"
+                    >
+                        {{ t("policy-reapply") }}
+                    </button>
                 </div>
             </div>
         </div>

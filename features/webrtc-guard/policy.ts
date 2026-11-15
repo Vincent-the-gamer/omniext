@@ -1,4 +1,5 @@
 import { browser } from '#imports';
+import type { BrowserState } from '@/features/types';
 import type { FeatureSettings } from '@/utils/feature-settings';
 
 /**
@@ -16,9 +17,14 @@ export type WebRtcIpPolicy =
   | 'default_public_interface_only'
   | 'disable_non_proxied_udp';
 
+interface PolicyDetails {
+  value?: string;
+  levelOfControl?: string;
+}
+
 interface PolicyApi {
   set: (detail: { value: string }) => void;
-  get: (callback: (details: { value: string }) => void) => void;
+  get: (callback: (details: PolicyDetails) => void) => void;
 }
 
 /** 该 API 是 Chrome 特有的，其它浏览器（如 Firefox）没有。 */
@@ -28,6 +34,57 @@ function webRtcPolicy(): PolicyApi | undefined {
   }).privacy;
 
   return privacy?.network?.webRTCIPHandlingPolicy;
+}
+
+/** manifest 里声明的权限，用于排查“API 不可用”是不是权限缺失。 */
+function declaredPermissions(): string[] {
+  try {
+    const manifest = browser.runtime.getManifest() as { permissions?: string[] };
+    return manifest.permissions ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 浏览器里 WebRTC 策略的真实状态：是否可用、当前生效的值、控制级别。
+ *
+ * `not_controllable` 表示这个值由 Chrome 的启动参数或企业策略设定，
+ * 扩展的 `set()` 会被静默忽略 —— 这种情况不能写成“浏览器不支持”。
+ */
+export async function readWebRtcIpState(): Promise<BrowserState> {
+  const policy = webRtcPolicy();
+
+  if (!policy) {
+    return {
+      supported: false,
+      values: {},
+      error: 'chrome.privacy.network.webRTCIPHandlingPolicy',
+      permissions: declaredPermissions(),
+    };
+  }
+
+  try {
+    const details = await new Promise<PolicyDetails>((resolve, reject) => {
+      try {
+        policy.get((result) => resolve(result ?? {}));
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    return {
+      supported: true,
+      values: details.value ? { ipPolicy: details.value } : {},
+      levelOfControl: details.levelOfControl,
+    };
+  } catch (error) {
+    return {
+      supported: true,
+      values: {},
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**
@@ -47,23 +104,6 @@ export function applyWebRtcIpPolicy(settings: FeatureSettings): void {
   try {
     policy.set({ value });
   } catch {
-    // 浏览器拒绝访问隐私设置时忽略，不影响其它功能。
+    // 浏览器拒绝访问隐私设置时忽略；界面会通过 readWebRtcIpState 显示原因。
   }
-}
-
-/**
- * 读取浏览器当前实际生效的策略，用于界面里确认改动是否真的落地。
- * 不支持时返回 `undefined`。
- */
-export function getWebRtcIpPolicy(): Promise<string | undefined> {
-  const policy = webRtcPolicy();
-  if (!policy) return Promise.resolve(undefined);
-
-  return new Promise((resolve) => {
-    try {
-      policy.get((details) => resolve(details?.value));
-    } catch {
-      resolve(undefined);
-    }
-  });
 }

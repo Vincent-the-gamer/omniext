@@ -80,6 +80,11 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'feature-options': 'Extra options',
     'policy-mismatch': 'The browser currently reports “{value}”, so the change did not take effect. Toggle the switch off and on again.',
     'policy-not-supported': 'This browser does not offer Chrome’s WebRTC IP policy, so the mode selector has no effect here.',
+    'policy-current': 'Chrome currently reports “{value}” (control level: {control}).',
+    'policy-unknown': 'no value',
+    'policy-locked': 'Chrome reports this setting is fixed by “{control}”, and the current value is “{value}”, so the extension cannot change it. A command-line flag or an enterprise policy usually sets it.',
+    'policy-permissions': 'Permissions this extension declares: {permissions}.',
+    'policy-reapply': 'Re-apply the policy',
   },
   zh: {
     settings: '设置',
@@ -130,6 +135,11 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'feature-options': '额外选项',
     'policy-mismatch': '浏览器当前实际策略是“{value}”，说明改动没有落地；请把开关关闭再打开一次。',
     'policy-not-supported': '当前浏览器没有 Chrome 的 WebRTC IP 策略设置，这里的选择不会生效。',
+    'policy-current': 'Chrome 当前实际策略是“{value}”（控制级别：{control}）。',
+    'policy-unknown': '没有返回值',
+    'policy-locked': 'Chrome 表示该设置被“{control}”锁定，当前值是“{value}”，扩展无法改动它。通常是 Chrome 的启动参数或企业策略设定了这个值。',
+    'policy-permissions': '扩展当前声明的权限：{permissions}。',
+    'policy-reapply': '重新应用策略',
   },
 };
 
