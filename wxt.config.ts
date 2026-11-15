@@ -6,6 +6,6 @@ export default defineConfig({
   manifest: {
     name: 'Omniext',
     description: 'Omnipotent browser extension.',
-    permissions: ['storage'],
+    permissions: ['storage', 'privacy'],
   },
 });

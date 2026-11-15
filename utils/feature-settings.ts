@@ -1,5 +1,12 @@
 import { storage } from '#imports';
-import { filterMatchingRules, matchesAnyRule, matchesRule } from '@/utils/host';
+import type { FeatureOption } from '@/features/types';
+import {
+  filterMatchingRules,
+  isValidRule,
+  matchesAnyRule,
+  matchesRule,
+  normalizeRule,
+} from '@/utils/host';
 
 /** 功能的作用范围。 */
 export type FeatureScope = 'all' | 'whitelist' | 'blacklist';
@@ -12,11 +19,59 @@ export interface FeatureSettings {
   scope: FeatureScope;
   /** 域名规则，支持后缀通配与 IP。 */
   rules: string[];
+  /** 功能自带的可选参数，键为 `FeatureOption.key`。 */
+  options: Record<string, string>;
 }
 
 const SCOPES: readonly FeatureScope[] = ['all', 'whitelist', 'blacklist'];
 
-type FeatureLike = { id: string; defaultEnabled: boolean };
+type FeatureLike = {
+  id: string;
+  defaultEnabled: boolean;
+  options?: readonly FeatureOption[];
+};
+
+/**
+ * 归一化规则列表：统一写法、去掉非法项、去重。
+ * 写入存储前每次都经过这里，所以用户配置的规则不会被重复或残缺的记录。
+ */
+function cleanRules(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  const rules: string[] = [];
+
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+
+    const rule = normalizeRule(item);
+    if (rule === '' || !isValidRule(rule) || seen.has(rule)) continue;
+
+    seen.add(rule);
+    rules.push(rule);
+  }
+
+  return rules;
+}
+
+/**
+ * 归一化可选参数：只接受功能声明过的取值，其余退回默认值。
+ * 这样即使存储里留下过时或残缺的值，界面与后台逻辑也不会崩。
+ */
+function cleanOptions(raw: unknown, feature: FeatureLike): Record<string, string> {
+  const source = (raw ?? {}) as Record<string, unknown>;
+  const options: Record<string, string> = {};
+
+  for (const option of feature.options ?? []) {
+    const value = source[option.key];
+    options[option.key] =
+      typeof value === 'string' && option.values.some((item) => item.value === value)
+        ? value
+        : option.default;
+  }
+
+  return options;
+}
 
 /** 未知结构一律收敛成合法设置，避免旧数据把界面搞崩。 */
 export function normalizeSettings(value: unknown, feature: FeatureLike): FeatureSettings {
@@ -25,9 +80,8 @@ export function normalizeSettings(value: unknown, feature: FeatureLike): Feature
   return {
     enabled: typeof source.enabled === 'boolean' ? source.enabled : feature.defaultEnabled,
     scope: SCOPES.includes(source.scope as FeatureScope) ? (source.scope as FeatureScope) : 'all',
-    rules: Array.isArray(source.rules)
-      ? source.rules.filter((rule): rule is string => typeof rule === 'string' && rule.trim() !== '')
-      : [],
+    rules: cleanRules(source.rules),
+    options: cleanOptions(source.options, feature),
   };
 }
 
@@ -46,21 +100,35 @@ function migrateSettings(value: unknown, feature: FeatureLike): FeatureSettings 
     ? source.pausedHosts.filter((host): host is string => typeof host === 'string' && host !== '')
     : [];
 
-  return {
-    enabled: typeof source.enabled === 'boolean' ? source.enabled : feature.defaultEnabled,
-    scope: pausedHosts.length > 0 ? 'blacklist' : 'all',
-    rules: pausedHosts,
-  };
+  return normalizeSettings(
+    {
+      enabled: typeof source.enabled === 'boolean' ? source.enabled : feature.defaultEnabled,
+      scope: pausedHosts.length > 0 ? 'blacklist' : 'all',
+      rules: cleanRules(pausedHosts),
+    },
+    feature,
+  );
 }
 
 /**
  * 设置按功能分开存储（`local:feature:<id>`），新增功能不需要迁移整体设置。
+ * 浏览器本地存储写入后不会过期：关闭浏览器或重启电脑后规则依然在。
+ *
+ * 版本 2 引入 `scope` / `rules`，版本 3 引入 `options`（功能自带的可选参数）。
  */
 function defineFeatureSettings(feature: FeatureLike) {
   return storage.defineItem<FeatureSettings>(`local:feature:${feature.id}`, {
-    fallback: { enabled: feature.defaultEnabled, scope: 'all', rules: [] },
-    version: 2,
-    migrations: { 2: (value) => migrateSettings(value, feature) },
+    fallback: {
+      enabled: feature.defaultEnabled,
+      scope: 'all',
+      rules: [],
+      options: cleanOptions(undefined, feature),
+    },
+    version: 3,
+    migrations: {
+      2: (value) => migrateSettings(value, feature),
+      3: (value) => normalizeSettings(value, feature),
+    },
   });
 }
 

@@ -30,6 +30,9 @@ export function startFeatureHost(): void {
   }
 
   for (const feature of features) {
+    // 全局功能（如 WebRTC 的 IP 策略）由后台改浏览器设置，不需要页面运行实例。
+    if (!feature.createRuntime) continue;
+
     const runtime = feature.createRuntime({ hostname });
     const active = feature.defaultEnabled;
     runtimes.set(feature.id, { runtime, active });

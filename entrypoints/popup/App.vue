@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from "vue";
 import { browser } from "#imports";
+import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
 import { useFeatures, type FeatureRow } from "@/composables/use-features";
+import { useLocale } from "@/composables/use-locale";
 import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
 import {
     isFeatureActive,
@@ -10,12 +12,14 @@ import {
     settingsForHost,
     type FeatureSettings,
 } from "@/utils/feature-settings";
+import { localized } from "@/utils/i18n";
 import { PAGE_INFO_MESSAGE, type PageInfo } from "@/utils/messaging";
 
 const manifest = browser.runtime.getManifest() as {
     version: string;
     author?: string;
 };
+const { locale, setLocale, t } = useLocale();
 const { rows, update } = useFeatures();
 
 const version = APP_VERSION;
@@ -60,22 +64,43 @@ function isActiveHere(settings: FeatureSettings): boolean {
     return isFeatureActive(settings, hostname.value);
 }
 
-function statusOf(settings: FeatureSettings): string {
-    if (!settings.enabled) return "已关闭";
-    if (!hostname.value) return "此页面不适用";
-    return isActiveHere(settings) ? "本页生效" : "本页暂停";
+/** 全局功能（如 WebRTC 的 IP 策略）不按域名区分，开关就是浏览器级别的。 */
+function isGlobal(row: FeatureRow): boolean {
+    return row.feature.global === true;
 }
 
-function statusTone(settings: FeatureSettings): string {
+function statusOf(row: FeatureRow): string {
+    const settings = row.settings;
+    if (!settings.enabled) return t("status-off");
+    if (isGlobal(row)) return t("status-active-global");
+    if (!hostname.value) return t("status-not-applicable");
+    return isActiveHere(settings) ? t("status-active") : t("status-paused");
+}
+
+function statusTone(row: FeatureRow): string {
+    const settings = row.settings;
     if (!settings.enabled) return "off";
+    if (isGlobal(row)) return "on";
     if (!hostname.value) return "muted";
     return isActiveHere(settings) ? "on" : "paused";
 }
 
-function scopeLabel(settings: FeatureSettings): string {
-    if (settings.scope === "whitelist") return "白名单";
-    if (settings.scope === "blacklist") return "黑名单";
-    return "全部网站";
+function scopeLabel(row: FeatureRow): string {
+    if (isGlobal(row)) return t("scope-global");
+    const settings = row.settings;
+    if (settings.scope === "whitelist") return t("scope-whitelist");
+    if (settings.scope === "blacklist") return t("scope-blacklist");
+    return t("scope-all");
+}
+
+/** 全局功能当前选中的模式，例如 WebRTC 的 IP 策略。 */
+function modeLabel(row: FeatureRow): string {
+    const option = row.feature.options?.[0];
+    if (!option) return "";
+
+    const value = row.settings.options?.[option.key] ?? option.default;
+    const choice = option.values.find((item) => item.value === value);
+    return choice ? localized(choice.label, locale.value) : value;
 }
 
 /** 当前域名命中的规则，只显示真正起作用的那些。 */
@@ -124,9 +149,17 @@ async function openOptions(): Promise<void> {
                 <span v-if="author" class="head__author">{{ author }}</span>
             </div>
 
+            <LanguageSwitch
+                class="head__lang"
+                :value="locale"
+                @change="setLocale"
+            />
+
             <button
                 class="btn btn--sm head__settings"
                 type="button"
+                :title="t('settings')"
+                :aria-label="t('settings')"
                 @click="openOptions"
             >
                 <svg
@@ -145,20 +178,19 @@ async function openOptions(): Promise<void> {
                         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
                     />
                 </svg>
-                设置
             </button>
         </header>
 
         <div class="site">
-            <span class="site__label">当前网站</span>
+            <span class="site__label">{{ t("current-site") }}</span>
             <span v-if="hostname" class="site__host" :title="page?.url">{{
                 hostname
             }}</span>
             <span v-else class="site__host site__host--muted"
-                >浏览器内置页面</span
+                >{{ t("browser-page") }}</span
             >
             <span v-if="hostname" class="site__count"
-                >{{ activeCount }}/{{ rows.length }} 生效</span
+                >{{ t("active-count", { active: activeCount, total: rows.length }) }}</span
             >
         </div>
 
@@ -176,16 +208,20 @@ async function openOptions(): Promise<void> {
 
                         <div class="feature__intro">
                             <h2 class="feature__name">
-                                {{ row.feature.name }}
+                                {{ localized(row.feature.name, locale) }}
                             </h2>
                             <p class="feature__desc">
-                                {{ row.feature.description }}
+                                {{ localized(row.feature.description, locale) }}
                             </p>
                         </div>
 
                         <ToggleSwitch
                             :model-value="row.settings.enabled"
-                            :label="`${row.feature.name} 总开关`"
+                            :label="
+                                t('master-switch', {
+                                    name: localized(row.feature.name, locale),
+                                })
+                            "
                             @update:model-value="
                                 update(row, { enabled: $event })
                             "
@@ -195,14 +231,19 @@ async function openOptions(): Promise<void> {
                     <div class="feature__meta">
                         <span
                             class="state"
-                            :class="`state--${statusTone(row.settings)}`"
+                            :class="`state--${statusTone(row)}`"
                         >
-                            {{ statusOf(row.settings) }}
+                            {{ statusOf(row) }}
                         </span>
                         <span class="dot" aria-hidden="true">·</span>
-                        <span class="scope">{{
-                            scopeLabel(row.settings)
-                        }}</span>
+                        <span class="scope">{{ scopeLabel(row) }}</span>
+                        <span
+                            v-if="isGlobal(row) && row.settings.enabled && modeLabel(row)"
+                            class="chip chip--accent"
+                            :title="localized(row.feature.options?.[0]?.label ?? '', locale)"
+                        >
+                            {{ modeLabel(row) }}
+                        </span>
                         <span
                             v-for="rule in hitRules(row.settings)"
                             :key="rule"
@@ -212,24 +253,29 @@ async function openOptions(): Promise<void> {
                         </span>
                         <span
                             v-if="
+                                !isGlobal(row) &&
                                 row.settings.scope !== 'all' &&
                                 hitRules(row.settings).length === 0
                             "
                             class="scope"
                         >
-                            未命中规则
+                            {{ t("no-rule-match") }}
                         </span>
 
                         <button
-                            v-if="hostname && row.settings.enabled"
+                            v-if="
+                                hostname &&
+                                row.settings.enabled &&
+                                !isGlobal(row)
+                            "
                             class="link feature__action"
                             type="button"
                             @click="toggleHere(row)"
                         >
                             {{
                                 isActiveHere(row.settings)
-                                    ? "暂停本页"
-                                    : "在本页启用"
+                                    ? t("pause-here")
+                                    : t("enable-here")
                             }}
                         </button>
                     </div>
@@ -238,7 +284,7 @@ async function openOptions(): Promise<void> {
         </div>
 
         <footer class="foot">
-            <span>设置自动保存，页面即时生效</span>
+            <span>{{ t("auto-save-note") }}</span>
         </footer>
     </div>
 </template>
@@ -298,6 +344,7 @@ async function openOptions(): Promise<void> {
 
 .head__settings {
     flex: none;
+    padding: 7px 9px;
 }
 
 /* ---------- 当前网站 ---------- */
