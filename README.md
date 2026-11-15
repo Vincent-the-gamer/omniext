@@ -15,7 +15,6 @@ apply browser-wide.
 
 - **Unlock copy restrictions** — restores selecting, copying and right-clicking on sites that block them.
 - **WebRTC Network Limiter** — sets Chrome's WebRTC IP policy so a site cannot read your real or local IP.
-- **Interface language** — English or Chinese, and your choice is remembered.
 
 More features coming soon.
 
