@@ -1,0 +1,38 @@
+html,
+body,
+#app {
+    height: 100%;
+}
+
+body {
+    width: 380px;
+    height: 540px;
+    overflow: hidden;
+    background:
+        radial-gradient(
+            72% 40% at 50% -6%,
+            rgba(0, 220, 130, 0.16),
+            transparent 70%
+        ),
+        var(--bg);
+    background-repeat: no-repeat;
+}
+
+/* 内容区滚动条 */
+* {
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
