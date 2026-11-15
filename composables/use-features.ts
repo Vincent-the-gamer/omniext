@@ -45,7 +45,8 @@ export function useFeatures() {
 
   /** 保存设置：界面立即更新，存储写入在后台完成。 */
   async function update(row: FeatureRow, patch: Partial<FeatureSettings>): Promise<void> {
-    const settings: FeatureSettings = { ...row.settings, ...patch };
+    // 写入前归一化（统一写法、去重），保证存下来的规则完整、可复用。
+    const settings = normalizeSettings({ ...row.settings, ...patch }, row.feature);
     row.settings = settings;
     await featureSettings(row.feature).setValue(settings);
   }

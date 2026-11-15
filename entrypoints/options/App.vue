@@ -1,10 +1,13 @@
 <script lang="ts" setup>
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import CursorGlow from "@/components/CursorGlow.vue";
 import FeatureCard from "@/components/FeatureCard.vue";
+import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import { useFeatures } from "@/composables/use-features";
+import { useLocale } from "@/composables/use-locale";
 import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
 
+const { locale, setLocale, t } = useLocale();
 const { rows, ready, update } = useFeatures();
 
 const version = APP_VERSION;
@@ -15,6 +18,13 @@ const enabledCount = computed(
 const ruleCount = computed(() =>
     rows.value.reduce((total, row) => total + row.settings.rules.length, 0),
 );
+
+/** 浏览器标签上的标题也要跟随语言。 */
+function applyTitle(): void {
+    document.title = `Omniext — ${t("settings")}`;
+}
+applyTitle();
+watch(locale, applyTitle);
 </script>
 
 <template>
@@ -35,8 +45,14 @@ const ruleCount = computed(() =>
                 <span class="nav__author">by {{ author }}</span>
             </div>
             <span class="nav__state"
-                >{{ enabledCount }} / {{ rows.length }} 个功能已启用</span
+                >{{
+                    t("features-enabled", {
+                        enabled: enabledCount,
+                        total: rows.length,
+                    })
+                }}</span
             >
+            <LanguageSwitch :value="locale" @change="setLocale" />
         </header>
 
         <main class="main">
@@ -45,17 +61,17 @@ const ruleCount = computed(() =>
                     <span class="badge__dot" aria-hidden="true" />
                     {{
                         ruleCount > 0
-                            ? `${ruleCount} 条域名规则`
-                            : "当前不限制域名"
+                            ? t("rule-count", { count: ruleCount })
+                            : t("no-rule-limit")
                     }}
                 </span>
 
                 <h1 class="hero__title" data-enter>
-                    功能<br /><span>控制台</span>
+                    {{ t("hero-line1") }}<br /><span>{{ t("hero-line2") }}</span>
                 </h1>
 
                 <p class="hero__lede" data-enter>
-                    每个功能单独开关，按域名规则决定在哪些网站上生效。改动即时保存，已经打开的页面无需刷新。
+                    {{ t("lede") }}
                 </p>
             </section>
 
@@ -65,11 +81,11 @@ const ruleCount = computed(() =>
                 aria-labelledby="features-title"
             >
                 <div class="features__head">
-                    <h2 id="features-title">功能</h2>
-                    <span>{{ rows.length }} 项</span>
+                    <h2 id="features-title">{{ t("features-label") }}</h2>
+                    <span>{{ t("feature-count", { count: rows.length }) }}</span>
                 </div>
 
-                <p v-if="!ready" class="loading">正在读取设置…</p>
+                <p v-if="!ready" class="loading">{{ t("loading") }}</p>
 
                 <div v-else class="features__list">
                     <FeatureCard
@@ -84,7 +100,7 @@ const ruleCount = computed(() =>
         </main>
 
         <footer class="footer">
-            <span>设置保存在浏览器本地，不会上传</span>
+            <span>{{ t("stored-note") }}</span>
             <span>Omniext v{{ version }}</span>
         </footer>
     </div>

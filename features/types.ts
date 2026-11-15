@@ -9,6 +9,8 @@
  * 依赖这份接口，因此会自动识别新功能，无需改动其它代码。
  */
 
+import type { LocalizedText } from '@/utils/i18n';
+
 /** 功能运行时能拿到的页面信息。 */
 export interface FeatureContext {
   /** 功能所在框架的域名，例如 `news.example.com`；没有域名时为空字符串。 */
@@ -27,16 +29,16 @@ export interface FeatureRuntime {
 export interface FeatureDefinition {
   /** 稳定 ID，同时用作设置存储的键后缀，不要随意改动。 */
   id: string;
-  /** 弹窗中显示的名称。 */
-  name: string;
-  /** 弹窗中显示的说明。 */
-  description: string;
+  /** 弹窗中显示的名称，英文与中文各一份。 */
+  name: LocalizedText;
+  /** 弹窗中显示的说明，英文与中文各一份。 */
+  description: LocalizedText;
   /** 弹窗中显示的图标（emoji，避免额外打包图片资源）。 */
   icon: string;
   /** 新安装时的默认开关状态。 */
   defaultEnabled: boolean;
-  /** 设置页中展示的补充说明，每条一句话。 */
-  details?: readonly string[];
+  /** 设置页中展示的补充说明，每条一句话，英文与中文各一份。 */
+  details?: readonly LocalizedText[];
   /**
    * 创建该功能在当前页面的运行实例。
    *

@@ -2,8 +2,10 @@
 import { computed } from "vue";
 import RuleEditor from "@/components/RuleEditor.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
+import { useLocale } from "@/composables/use-locale";
 import type { FeatureDefinition } from "@/features/types";
 import type { FeatureScope, FeatureSettings } from "@/utils/feature-settings";
+import { localized } from "@/utils/i18n";
 
 const props = defineProps<{
     feature: FeatureDefinition;
@@ -12,23 +14,45 @@ const props = defineProps<{
 
 const emit = defineEmits<{ change: [patch: Partial<FeatureSettings>] }>();
 
-const SCOPES: ReadonlyArray<{
-    value: FeatureScope;
-    label: string;
-    hint: string;
-}> = [
-    { value: "all", label: "全部网站", hint: "所有网站都生效。" },
-    { value: "whitelist", label: "白名单", hint: "只在命中规则的网站生效。" },
-    {
-        value: "blacklist",
-        label: "黑名单",
-        hint: "命中规则的网站不生效，其余照常。",
-    },
-];
+const { locale, t } = useLocale();
+
+/** 功能文案与界面文案都跟随当前语言。 */
+const name = computed(() => localized(props.feature.name, locale.value));
+const description = computed(
+    () => localized(props.feature.description, locale.value),
+);
+const details = computed(() =>
+    (props.feature.details ?? []).map((detail) =>
+        localized(detail, locale.value),
+    ),
+);
+
+const SCOPES: ReadonlyArray<{ value: FeatureScope; label: string; hint: string }> =
+    [
+        { value: "all", label: "scope-all", hint: "hint-all" },
+        {
+            value: "whitelist",
+            label: "scope-whitelist",
+            hint: "hint-whitelist",
+        },
+        {
+            value: "blacklist",
+            label: "scope-blacklist",
+            hint: "hint-blacklist",
+        },
+    ];
+
+const scopes = computed(() =>
+    SCOPES.map((scope) => ({
+        value: scope.value,
+        label: t(scope.label),
+        hint: t(scope.hint),
+    })),
+);
 
 const scopeHint = computed(
     () =>
-        SCOPES.find((scope) => scope.value === props.settings.scope)?.hint ??
+        scopes.value.find((scope) => scope.value === props.settings.scope)?.hint ??
         "",
 );
 
@@ -48,37 +72,37 @@ const rulesInactive = computed(
             }}</span>
 
             <div class="feature__intro">
-                <h3 class="feature__name">{{ feature.name }}</h3>
-                <p class="feature__desc">{{ feature.description }}</p>
+                <h3 class="feature__name">{{ name }}</h3>
+                <p class="feature__desc">{{ description }}</p>
             </div>
 
             <ToggleSwitch
                 :model-value="settings.enabled"
-                :label="`${feature.name} 总开关`"
+                :label="t('master-switch', { name })"
                 @update:model-value="emit('change', { enabled: $event })"
             />
         </header>
 
         <div class="feature__body">
-            <div v-if="feature.details?.length" class="feature__row">
-                <span class="field-label">功能说明</span>
+            <div v-if="details.length > 0" class="feature__row">
+                <span class="field-label">{{ t("details") }}</span>
                 <ul class="feature__details">
-                    <li v-for="detail in feature.details" :key="detail">
+                    <li v-for="detail in details" :key="detail">
                         {{ detail }}
                     </li>
                 </ul>
             </div>
 
             <div class="feature__row">
-                <span class="field-label">作用范围</span>
+                <span class="field-label">{{ t("scope") }}</span>
                 <div>
                     <div
                         class="segmented"
                         role="radiogroup"
-                        :aria-label="`${feature.name} 的作用范围`"
+                        :aria-label="t('scope-of', { name })"
                     >
                         <button
-                            v-for="scope in SCOPES"
+                            v-for="scope in scopes"
                             :key="scope.value"
                             type="button"
                             role="radio"
@@ -94,15 +118,18 @@ const rulesInactive = computed(
             </div>
 
             <div class="feature__row">
-                <span class="field-label">域名规则</span>
+                <span class="field-label">{{ t("domain-rules") }}</span>
                 <div>
                     <RuleEditor
                         :model-value="settings.rules"
                         @update:model-value="emit('change', { rules: $event })"
                     />
                     <p v-if="rulesInactive" class="error">
-                        当前是“全部网站”，这
-                        {{ settings.rules.length }} 条规则暂不生效。
+                        {{
+                            t("rules-inactive", {
+                                count: settings.rules.length,
+                            })
+                        }}
                     </p>
                 </div>
             </div>

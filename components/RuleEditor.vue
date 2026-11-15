@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { ref } from "vue";
+import { useLocale } from "@/composables/use-locale";
 import { isValidRule, normalizeRule } from "@/utils/host";
 
 const props = defineProps<{
@@ -9,24 +10,27 @@ const props = defineProps<{
 
 const emit = defineEmits<{ "update:modelValue": [value: string[]] }>();
 
+const { t } = useLocale();
+
 const draft = ref("");
-const error = ref("");
+/** 存文案键而不是文案，切换语言时提示也跟着变。 */
+const errorKey = ref("");
 
 function add(): void {
     const rule = normalizeRule(draft.value);
     if (rule === "") return;
 
     if (!isValidRule(rule)) {
-        error.value = "只支持域名、*.域名 后缀通配或 IP 地址";
+        errorKey.value = "rule-invalid";
         return;
     }
 
     if (props.modelValue.some((item) => normalizeRule(item) === rule)) {
-        error.value = "这条规则已经存在";
+        errorKey.value = "rule-duplicate";
         return;
     }
 
-    error.value = "";
+    errorKey.value = "";
     draft.value = "";
     emit("update:modelValue", [...props.modelValue, rule]);
 }
@@ -51,7 +55,7 @@ function remove(rule: string): void {
                 <button
                     type="button"
                     class="chip__remove"
-                    :aria-label="`删除规则 ${rule}`"
+                    :aria-label="t('remove-rule-aria', { rule })"
                     @click="remove(rule)"
                 >
                     ×
@@ -64,23 +68,17 @@ function remove(rule: string): void {
                 v-model="draft"
                 class="input"
                 type="text"
-                :placeholder="
-                    placeholder ??
-                    'example.com 或 *.example.com 或 192.168.1.10'
-                "
-                aria-label="添加域名规则"
+                :placeholder="placeholder ?? t('rule-placeholder')"
+                :aria-label="t('add-rule-aria')"
                 autocomplete="off"
                 spellcheck="false"
-                @input="error = ''"
+                @input="errorKey = ''"
             />
-            <button class="btn" type="submit">添加</button>
+            <button class="btn" type="submit">{{ t("add-rule") }}</button>
         </form>
 
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
-        <p v-else class="hint">
-            example.com 会同时命中它的所有子域名；IP 可写成 192.168.1.10 或
-            192.168.1.*。
-        </p>
+        <p v-if="errorKey" class="error" role="alert">{{ t(errorKey) }}</p>
+        <p v-else class="hint">{{ t("rule-hint") }}</p>
     </div>
 </template>
 

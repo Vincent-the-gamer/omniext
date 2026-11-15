@@ -1,5 +1,11 @@
 import { storage } from '#imports';
-import { filterMatchingRules, matchesAnyRule, matchesRule } from '@/utils/host';
+import {
+  filterMatchingRules,
+  isValidRule,
+  matchesAnyRule,
+  matchesRule,
+  normalizeRule,
+} from '@/utils/host';
 
 /** 功能的作用范围。 */
 export type FeatureScope = 'all' | 'whitelist' | 'blacklist';
@@ -18,6 +24,29 @@ const SCOPES: readonly FeatureScope[] = ['all', 'whitelist', 'blacklist'];
 
 type FeatureLike = { id: string; defaultEnabled: boolean };
 
+/**
+ * 归一化规则列表：统一写法、去掉非法项、去重。
+ * 写入存储前每次都经过这里，所以用户配置的规则不会被重复或残缺的记录。
+ */
+function cleanRules(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  const rules: string[] = [];
+
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+
+    const rule = normalizeRule(item);
+    if (rule === '' || !isValidRule(rule) || seen.has(rule)) continue;
+
+    seen.add(rule);
+    rules.push(rule);
+  }
+
+  return rules;
+}
+
 /** 未知结构一律收敛成合法设置，避免旧数据把界面搞崩。 */
 export function normalizeSettings(value: unknown, feature: FeatureLike): FeatureSettings {
   const source = (value ?? {}) as Partial<FeatureSettings>;
@@ -25,9 +54,7 @@ export function normalizeSettings(value: unknown, feature: FeatureLike): Feature
   return {
     enabled: typeof source.enabled === 'boolean' ? source.enabled : feature.defaultEnabled,
     scope: SCOPES.includes(source.scope as FeatureScope) ? (source.scope as FeatureScope) : 'all',
-    rules: Array.isArray(source.rules)
-      ? source.rules.filter((rule): rule is string => typeof rule === 'string' && rule.trim() !== '')
-      : [],
+    rules: cleanRules(source.rules),
   };
 }
 
@@ -49,12 +76,13 @@ function migrateSettings(value: unknown, feature: FeatureLike): FeatureSettings 
   return {
     enabled: typeof source.enabled === 'boolean' ? source.enabled : feature.defaultEnabled,
     scope: pausedHosts.length > 0 ? 'blacklist' : 'all',
-    rules: pausedHosts,
+    rules: cleanRules(pausedHosts),
   };
 }
 
 /**
  * 设置按功能分开存储（`local:feature:<id>`），新增功能不需要迁移整体设置。
+ * 浏览器本地存储写入后不会过期：关闭浏览器或重启电脑后规则依然在。
  */
 function defineFeatureSettings(feature: FeatureLike) {
   return storage.defineItem<FeatureSettings>(`local:feature:${feature.id}`, {
