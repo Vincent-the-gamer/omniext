@@ -8,15 +8,23 @@ Omnipotent browser extension.
 ## Abilities
 
 - Unlock any copy limitation.
-- Block WebRTC, so a site cannot read your real or local IP address.
+- Disable WebRTC entirely, so a site cannot read your real or local IP address.
 
 and soon...
 
 ## WebRTC protection
 
-`Block WebRTC leak` uses the same mechanism as Google's *WebRTC Network Limiter*:
-Chrome's built-in `webRTCIPHandlingPolicy`, which decides which network addresses
-WebRTC is allowed to use. While the switch is on you pick one of four modes:
+`Disable WebRTC` blocks WebRTC on two levels, so nothing leaks:
+
+1. **Page level** — before a site's own scripts run, the content script removes
+   `RTCPeerConnection`, `RTCSessionDescription`, `MediaStreamTrack`, `MediaStream`,
+   `RTCDataChannel`, `getUserMedia` and `navigator.mediaDevices` from the page (in
+   every frame). A site cannot open a WebRTC connection, and video/audio capture
+   through WebRTC is gone too.
+2. **Browser level** — Chrome's `webRTCIPHandlingPolicy`, the same mechanism as
+   Google's *WebRTC Network Limiter*, is tightened. This covers what the page
+   patch cannot reach, such as Web Workers and other tabs. While the switch is on
+   you pick one of four modes:
 
 | Mode | Effect |
 | --- | --- |
@@ -25,12 +33,12 @@ WebRTC is allowed to use. While the switch is on you pick one of four modes:
 | Public IP only | Only the default public interface is used; LAN addresses stay hidden. |
 | Proxy only (default) | WebRTC UDP is disabled unless it goes through a proxy, so a leak test finds no WebRTC IP at all. |
 
-The policy is browser-wide — it applies to every tab, not just the domains in your
-rules, so this feature has no domain rules. Turning the switch off restores the
-browser default.
+The browser-level policy is browser-wide — it applies to every tab, not just the
+domains in your rules, so this feature has no domain rules. Turning the switch off
+restores both the page APIs and the browser default.
 
-The strictest mode also breaks WebRTC apps such as Meet, Zoom or Discord — choose
-"Public IP only" or turn the switch off when you need them.
+Disabling WebRTC also breaks WebRTC apps such as Meet, Zoom or Discord — turn the
+switch off when you need them.
 
 ## Preview
 

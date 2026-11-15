@@ -1,44 +1,49 @@
 import type { FeatureDefinition } from '@/features/types';
 import { applyWebRtcIpPolicy, getWebRtcIpPolicy } from './policy';
+import { createWebRtcGuardRuntime } from './runtime';
 
 /**
- * WebRTC 防护：完全照 Google "WebRTC Network Limiter" 的做法 ——
- * 只有一个机制，但它是浏览器层面的，所以真正管用。
+ * WebRTC 防护：彻底禁用 WebRTC，不留任何泄露途径。
  *
- * Chrome 提供 `chrome.privacy.network.webRTCIPHandlingPolicy`，决定
- * WebRTC 允许使用哪些网络地址。开关开启期间收紧这个策略，网站就无法
- * 通过 WebRTC 读到真实 IP 或局域网 IP；开关关闭时恢复浏览器默认。
+ * 两层兜底，和 "WebRTC Control" 一类插件的思路一致：
  *
- * 这是浏览器全局设置，无法按域名区分，所以这个功能标记为 `global`：
- * 界面里没有域名规则，只有策略选择。
+ * 1. 页面层：把 `RTCPeerConnection`、`getUserMedia`、`navigator.mediaDevices`
+ *    等 WebRTC 相关的全局对象全部置为 undefined，页面连连接都创建不了，
+ *    视频/音频采集也一并禁用。
+ * 2. 浏览器层：收紧 `chrome.privacy.network.webRTCIPHandlingPolicy`（Google
+ *    "WebRTC Network Limiter" 的机制），覆盖内容脚本碰不到的地方，例如 Web
+ *    Worker 和其它标签页。
+ *
+ * 这是浏览器全局设置，无法按域名区分，所以功能标记为 `global`：界面里没有
+ * 域名规则，只有开关和策略选择。
  */
 const webrtcGuard: FeatureDefinition = {
   id: 'webrtc-guard',
   name: {
-    en: 'Block WebRTC leak',
-    zh: '阻止 WebRTC 泄露',
+    en: 'Disable WebRTC',
+    zh: '禁用 WebRTC',
   },
   icon: '🕸️',
   description: {
-    en: 'Limits how WebRTC handles IP addresses at the browser level, so sites cannot read your real or local IP.',
-    zh: '在浏览器层面限制 WebRTC 使用的网络地址，网站无法读到你的真实 IP 或局域网 IP。',
+    en: 'Turns WebRTC off completely: pages cannot create WebRTC connections, camera and microphone access through WebRTC is removed, and the browser’s WebRTC IP policy is set to the strictest mode.',
+    zh: '彻底禁用 WebRTC：页面无法建立 WebRTC 连接，通过 WebRTC 的摄像头和麦克风访问也被移除，同时把浏览器的 WebRTC IP 策略设为最严格模式。',
   },
   details: [
     {
-      en: 'WebRTC reveals your IP address even when cookies and tracking are disabled. This feature uses Chrome’s built-in WebRTC IP policy — the same mechanism as Google’s WebRTC Network Limiter — to decide which network addresses WebRTC may use.',
-      zh: '即使禁用 Cookie 和追踪，WebRTC 也能读出你的 IP。本功能使用 Chrome 内置的 WebRTC IP 策略（与 Google 的 WebRTC Network Limiter 同一机制），决定 WebRTC 可以使用哪些网络地址。',
+      en: 'WebRTC can read your real and local IP address even with cookies and tracking disabled. With the switch on, WebRTC is disabled outright: `RTCPeerConnection`, `RTCSessionDescription`, `MediaStreamTrack`, `getUserMedia` and `navigator.mediaDevices` are removed from every page.',
+      zh: '即使禁用 Cookie 和追踪，WebRTC 也能读出你的真实 IP 和局域网 IP。开关开启后 WebRTC 直接被禁用：页面里的 `RTCPeerConnection`、`RTCSessionDescription`、`MediaStreamTrack`、`getUserMedia`、`navigator.mediaDevices` 都被移除。',
     },
     {
-      en: '“Proxy only” is the strictest mode: WebRTC UDP is disabled unless it goes through a proxy, so a leak test finds no WebRTC IP at all.',
-      zh: '“只走代理”是最严格的模式：除非走代理，否则禁用 WebRTC 的 UDP，泄露检测网站读不到任何 WebRTC IP。',
+      en: 'The browser-level IP policy is applied at the same time, so WebRTC inside Web Workers or other tabs cannot reach your IP either. “Proxy only” is the strictest mode and leaves no WebRTC IP at all.',
+      zh: '同时收紧浏览器层面的 IP 策略，所以 Web Worker 或其它标签页里的 WebRTC 也读不到你的 IP。“只走代理”是最严格的模式，完全不给 WebRTC 任何 IP。',
     },
     {
-      en: 'The policy is browser-wide: while the switch is on it applies to every tab. Turning the switch off restores the browser default.',
-      zh: '策略是浏览器全局的：开关开启时对所有标签页生效；关闭开关会恢复浏览器默认。',
+      en: 'Audio and video through WebRTC are disabled too — WebRTC camera, microphone and media streams are gone. Turning the switch off restores everything.',
+      zh: 'WebRTC 的音视频也一并禁用——摄像头、麦克风与媒体流都不可用。关闭开关后一切恢复正常。',
     },
     {
-      en: 'The strictest mode also breaks WebRTC apps such as Meet, Zoom or Discord — choose “Public IP only” or turn the switch off when you need them.',
-      zh: '最严格的模式会让 Meet、Zoom、Discord 这类 WebRTC 应用无法连接，需要时选“只用公网 IP”或关闭开关。',
+      en: 'The setting is browser-wide, so it has no domain rules. It also breaks WebRTC apps such as Meet, Zoom or Discord; turn the switch off when you need them.',
+      zh: '设置是浏览器全局的，没有域名规则。它会让 Meet、Zoom、Discord 这类 WebRTC 应用无法连接，需要时请关闭开关。',
     },
   ],
   options: [
@@ -61,12 +66,12 @@ const webrtcGuard: FeatureDefinition = {
         },
         {
           value: 'disable_non_proxied_udp',
-          label: { en: 'Proxy only — WebRTC UDP disabled', zh: '只走代理——禁用非代理 UDP' },
+          label: { en: 'Proxy only — WebRTC disabled', zh: '只走代理——禁用 WebRTC' },
         },
       ],
       note: {
-        en: 'Browser-wide: it applies to every tab while the switch is on. Reload the page you are testing after changing it.',
-        zh: '浏览器全局生效：开关开启时对所有标签页有效；改动后请刷新正在测试的页面。',
+        en: 'Browser-wide: it applies to every tab while the switch is on, including pages the page-level patch cannot reach. Reload the page you are testing after changing it.',
+        zh: '浏览器全局生效：开关开启时对所有标签页有效，包括页面层补丁覆盖不到的地方；改动后请刷新正在测试的页面。',
       },
     },
   ],
@@ -74,6 +79,7 @@ const webrtcGuard: FeatureDefinition = {
   global: true,
   // 首次安装时所有开关都是关闭的，由用户主动开启。
   defaultEnabled: false,
+  createRuntime: createWebRtcGuardRuntime,
   applySettings: applyWebRtcIpPolicy,
   // 界面用真实值确认策略是否落地（浏览器拒绝改动时会提示）。
   readBrowserState: async (): Promise<Record<string, string>> => {
