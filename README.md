@@ -3,7 +3,7 @@
 Omnipotent browser extension.
 
 > [!WARNING]
-> This repo is under construction.
+> This repo is in active development for now.
 
 ## Abilities
 
