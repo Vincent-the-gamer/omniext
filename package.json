@@ -12,7 +12,6 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
-    "compile": "vue-tsc --noEmit",
     "postinstall": "wxt prepare",
     "dep": "taze major -I"
   },
@@ -24,7 +23,6 @@
     "taze": "^21.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
-    "vue-tsc": "^3.3.14",
     "web-ext": "^10.8.0",
     "wxt": "^0.21.5"
   }

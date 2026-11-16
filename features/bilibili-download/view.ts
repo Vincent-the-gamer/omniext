@@ -1,9 +1,9 @@
 /**
- * B 站直链下载的界面：视频下方的入口按钮 + 直链面板。
+ * B 站直链下载的界面：视频信息行右端的入口按钮 + 直链面板。
  *
- * 入口按钮是挂在 `document.body` 上的一层浮层，位置对齐 B 站自己的工具栏，
- * 但从不往它的 DOM 里插入节点。面板同样是一张浮层。这里只碰 DOM，取流与
- * 下载都在页面侧脚本里。
+ * 入口按钮是挂在 `document.body` 上的一层浮层，位置对齐 B 站视频信息行
+ * （播放量、发布时间）的右端，但从不往它的 DOM 里插入节点。面板同样是一张
+ * 浮层。这里只碰 DOM，取流与下载都在页面侧脚本里。
  */
 
 import { copyText, createElement, flashLabel, formatBytes } from '@/utils/dom';
@@ -13,7 +13,7 @@ import type { DownloadStage, FailureReason, StreamTrack, VideoSnapshot } from '.
 /** 入口浮层的固定 id：扩展重新加载后，用它清掉上一个实例留下的按钮。 */
 export const ENTRY_ELEMENT_ID = 'omniext-bilibili-entry';
 
-/** 工具栏入口按钮。 */
+/** 视频信息行右端的入口按钮。 */
 export interface EntryHandle {
   /** 浮层容器；挂在自己的 DOM 里，不碰页面的节点。 */
   element: HTMLElement;
@@ -25,7 +25,7 @@ export interface EntryHandle {
  * 创建入口按钮。
  *
  * 按钮本身放在一个绝对定位的容器里，容器由调用方挂到 `document.body` 上 ——
- * B 站的视频页是 SSR + hydration 渲染的，往它自己的工具栏里插入节点会让
+ * B 站的视频页是 SSR + hydration 渲染的，往它自己的容器里插入节点会让
  * `bili-header` 的 hydration 失败（顶部导航栏直接空白），只能从外面“贴”上去。
  */
 export function createEntryButton(locale: Locale, onToggle: () => void): EntryHandle {

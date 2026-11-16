@@ -25,8 +25,21 @@ const BILIBILI_HOST = 'www.bilibili.com';
 const PLAYER_PATHS = ['/video/', '/list/', '/bangumi/play/'] as const;
 
 /**
- * 入口按钮的落点，按 B 站当前与历史版本的 DOM 依次尝试。
- * 都找不到时退回到整个工具栏容器，按钮会排在右侧。
+ * 入口按钮的落点：视频信息行（播放量、弹幕数、发布时间）。
+ *
+ * 这一行右侧通常是空白，按钮贴上去既醒目，又不会压住 B 站自己的按钮；
+ * 视频下方的工具栏则挤满点赞、投币、分享、举报，只靠位置躲躲不干净。
+ */
+const META_SELECTORS = ['.video-info-meta', '#viewbox_report'] as const;
+
+/**
+ * 有些版本的 `#viewbox_report` 把整条工具栏也包了进去，这样的节点不能当信息行。
+ * 命中这些标记的候选跳过。
+ */
+const META_REJECT_SELECTORS = ['#arc_toolbar_report', '.video-toolbar-left'] as const;
+
+/**
+ * 找不到信息行时的退路：工具栏，按 B 站当前与历史版本的 DOM 依次尝试。
  */
 const TOOLBAR_SELECTORS = [
   '#arc_toolbar_report .video-toolbar-left',
@@ -35,7 +48,7 @@ const TOOLBAR_SELECTORS = [
   '#arc_toolbar_report',
 ] as const;
 
-/** 整行工具栏（包着左右两组按钮），定位时以它为准。 */
+/** 整行工具栏（包着左右两组按钮），兜底定位时以它为准。 */
 const TOOLBAR_ROW_SELECTORS = ['#arc_toolbar_report', '.video-toolbar', '.video-toolbar-container'] as const;
 
 /** 与工具栏最右边留出的距离，避开它自己的「更多」按钮。 */
@@ -158,6 +171,19 @@ export function createBilibiliDownloadRuntime(): FeatureRuntime {
     return PLAYER_PATHS.some((prefix) => location.pathname.startsWith(prefix));
   }
 
+  /** 视频信息行：播放量、弹幕数、发布时间所在的那一行。 */
+  function findMetaRow(): HTMLElement | null {
+    for (const selector of META_SELECTORS) {
+      const node = document.querySelector<HTMLElement>(selector);
+      if (node === null) continue;
+      if (META_REJECT_SELECTORS.some((marker) => node.querySelector(marker) !== null)) continue;
+
+      return node;
+    }
+
+    return null;
+  }
+
   function findToolbar(): HTMLElement | null {
     for (const selector of TOOLBAR_SELECTORS) {
       const node = document.querySelector<HTMLElement>(selector);
@@ -178,30 +204,47 @@ export function createBilibiliDownloadRuntime(): FeatureRuntime {
     return leftGroup?.parentElement ?? findToolbar();
   }
 
+  /** 写入文档坐标；太靠右时收进视口，避免被屏幕边缘切掉。 */
+  function placeEntry(left: number, top: number): void {
+    if (entry === null) return;
+
+    const maxLeft = window.innerWidth - entry.element.offsetWidth - PANEL_MARGIN;
+    const x = Math.max(PANEL_MARGIN, Math.min(left, maxLeft));
+
+    entry.element.style.left = `${Math.round(x + window.scrollX)}px`;
+    entry.element.style.top = `${Math.round(top + window.scrollY)}px`;
+  }
+
   /**
-   * 把入口按钮停到工具栏最右边。
+   * 把入口按钮停到视频信息行的最右边。
    *
    * 按钮在自己的浮层里（不属于页面 DOM），所以用文档坐标定位：滚动时页面
    * 内容与按钮一起移动，不需要逐帧重算；布局变化由低频校对和 resize 事件跟上。
    *
-   * B 站把点赞、分享、稿件举报这些操作都排在工具栏里，我们的节点不在它的
-   * 层叠上下文里，只能靠位置避开 —— 所以统一贴在整行的最右侧。
+   * 信息行右侧是空白，按钮不会压住播放量、发布时间这些文字，也不会像贴在
+   * 工具栏里那样盖住「更多」之类的按钮。页面结构变化、找不到这一行时退回
+   * 工具栏最右侧。
    */
   function positionEntry(): void {
     if (entry === null) return;
+
+    const width = entry.element.offsetWidth;
+    const height = entry.element.offsetHeight;
+
+    const meta = findMetaRow();
+    const metaRect = meta?.getBoundingClientRect() ?? null;
+
+    if (metaRect !== null && metaRect.width > 0 && metaRect.height > 0) {
+      placeEntry(metaRect.right - width, metaRect.top + (metaRect.height - height) / 2);
+      return;
+    }
 
     const row = findToolbarRow();
     if (row === null) return;
 
     const rect = row.getBoundingClientRect();
-    const width = entry.element.offsetWidth;
-    const height = entry.element.offsetHeight;
-
     const left = Math.max(rect.left, rect.right - width - TOOLBAR_RIGHT_GAP);
-    const top = rect.top + (rect.height - height) / 2;
-
-    entry.element.style.left = `${Math.round(left + window.scrollX)}px`;
-    entry.element.style.top = `${Math.round(top + window.scrollY)}px`;
+    placeEntry(left, rect.top + (rect.height - height) / 2);
   }
 
   /** 面板贴着按钮显示；下方放不下时翻到按钮上方。 */
@@ -344,8 +387,9 @@ export function createBilibiliDownloadRuntime(): FeatureRuntime {
   }
 
   /**
-   * 让入口按钮和页面状态对齐：视频页且工具栏存在时贴上按钮，离开视频页时移除。
-   * 由低频定时器驱动，不监听页面 DOM，也不会往页面自己的容器里插节点。
+   * 让入口按钮和页面状态对齐：视频页且视频信息行渲染出来后贴上按钮，
+   * 离开视频页时移除。由低频定时器驱动，不监听页面 DOM，也不会往页面
+   * 自己的容器里插节点。
    */
   function sync(): void {
     if (!active) return;
@@ -364,8 +408,8 @@ export function createBilibiliDownloadRuntime(): FeatureRuntime {
     }
 
     if (entry === null) {
-      // 工具栏还没渲染出来时先不动，等下一轮校对
-      if (findToolbar() === null) return;
+      // 信息行和工具栏都还没渲染出来时先不动，等下一轮校对
+      if (findMetaRow() === null && findToolbarRow() === null) return;
 
       removeStaleEntry();
       entry = createEntryButton(locale, togglePanel);
