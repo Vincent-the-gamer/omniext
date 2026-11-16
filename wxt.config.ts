@@ -7,5 +7,12 @@ export default defineConfig({
     name: 'Omniext',
     description: 'Omnipotent browser extension.',
     permissions: ['storage', 'privacy'],
+    // 内容脚本要把产品图标放进页面顶栏；页面侧的请求必须显式声明。
+    web_accessible_resources: [
+      {
+        resources: ['icon/32.png'],
+        matches: ['<all_urls>'],
+      },
+    ],
   },
 });

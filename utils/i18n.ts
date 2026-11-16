@@ -85,6 +85,8 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'policy-locked': 'Chrome reports this setting is fixed by “{control}”, and the current value is “{value}”, so the extension cannot change it. A command-line flag or an enterprise policy usually sets it.',
     'policy-permissions': 'Permissions this extension declares: {permissions}.',
     'policy-reapply': 'Re-apply the policy',
+    'viewer-copy': 'Copy',
+    'viewer-copied': 'Copied',
   },
   zh: {
     settings: '设置',
@@ -140,6 +142,8 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'policy-locked': 'Chrome 表示该设置被“{control}”锁定，当前值是“{value}”，扩展无法改动它。通常是 Chrome 的启动参数或企业策略设定了这个值。',
     'policy-permissions': '扩展当前声明的权限：{permissions}。',
     'policy-reapply': '重新应用策略',
+    'viewer-copy': '复制',
+    'viewer-copied': '已复制',
   },
 };
 
@@ -167,4 +171,14 @@ export const localeItem = storage.defineItem<Locale>('local:locale', {
 
 export function isValidLocale(value: unknown): value is Locale {
   return LOCALES.includes(value as Locale);
+}
+
+/** 读取保存的语言偏好；内容脚本里的查看器界面用它决定文案。 */
+export async function readLocale(): Promise<Locale> {
+  try {
+    const value = await localeItem.getValue();
+    return isValidLocale(value) ? value : DEFAULT_LOCALE;
+  } catch {
+    return DEFAULT_LOCALE;
+  }
 }

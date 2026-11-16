@@ -1,0 +1,360 @@
+/**
+ * 浏览器直接展示 JSON / 源码文本时的查看器样式。
+ *
+ * 视觉与弹窗、设置页保持同一套语言：近黑底色、顶部绿色光晕、同一组圆角与
+ * 按钮；变量名也沿用 `assets/theme.css`。这些规则只在页面 `<html>` 带上
+ * `oe-viewer` 类时生效，因此不会影响普通网页。
+ */
+
+html.oe-viewer {
+    color-scheme: dark;
+
+    /* 与 assets/theme.css 一致的底色、线条与文字 */
+    --bg: #08090a;
+    --surface: #0f1012;
+    --surface-hover: #15171a;
+    --inset: #0b0c0e;
+
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #f2f4f5;
+    --text-muted: #9aa0a8;
+    --text-faint: #71777e;
+
+    --accent: #00dc82;
+    --accent-hover: #2fe89d;
+    --accent-ink: #041611;
+    --accent-soft: rgba(0, 220, 130, 0.1);
+
+    --radius-sm: 8px;
+    --radius: 12px;
+
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans:
+        -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+
+    /* 语法配色：主色为绿，其余颜色保持同一明度，深色底下不刺眼 */
+    --syntax-key: #63eda9;
+    --syntax-string: #9ed0ff;
+    --syntax-number: #f0b34a;
+    --syntax-literal: #c9a4ff;
+    --syntax-punct: #7d848c;
+    --syntax-comment: #6b7178;
+    --syntax-keyword: #ff8fb3;
+    --syntax-regex: #6ee7d7;
+    --syntax-variable: #ffb86b;
+
+    background: var(--bg);
+}
+
+html.oe-viewer,
+html.oe-viewer body {
+    margin: 0;
+    padding: 0;
+}
+
+html.oe-viewer body {
+    min-height: 100vh;
+    /* 顶部绿色光晕，与弹窗、设置页一致 */
+    background:
+        radial-gradient(
+            90% 46% at 50% -8%,
+            rgba(0, 220, 130, 0.16),
+            transparent 62%
+        ),
+        radial-gradient(
+            55% 38% at 88% 6%,
+            rgba(0, 220, 130, 0.06),
+            transparent 72%
+        ),
+        var(--bg);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+html.oe-viewer ::selection {
+    background: rgba(0, 220, 130, 0.28);
+    color: #fff;
+}
+
+html.oe-viewer :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* 滚动条也跟着整体风格走 */
+html.oe-viewer * {
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    scrollbar-width: thin;
+}
+
+html.oe-viewer ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+html.oe-viewer ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+}
+
+html.oe-viewer ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.26);
+    background-clip: content-box;
+}
+
+.oe-code {
+    min-height: 100vh;
+    box-sizing: border-box;
+    color: var(--text);
+}
+
+.oe-code * {
+    box-sizing: border-box;
+}
+
+/* ---------- 顶栏 ---------- */
+
+.oe-bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(8, 9, 10, 0.86);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    font-family: var(--sans);
+}
+
+/* 产品信息：logo + 名称 / 版本 / 作者，与弹窗顶栏一致 */
+
+.oe-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.oe-brand__logo {
+    flex: none;
+    border-radius: 8px;
+}
+
+.oe-brand__text {
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.oe-brand__title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.oe-brand__name {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+}
+
+.oe-brand__version {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+}
+
+.oe-brand__author {
+    display: block;
+    overflow: hidden;
+    font-family: var(--sans);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-faint);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oe-bar__divider {
+    flex: none;
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+}
+
+.oe-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid rgba(0, 220, 130, 0.35);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--syntax-key);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.oe-bar__meta {
+    flex: none;
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 11.5px;
+}
+
+.oe-bar__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+/* 窄屏时优先保证操作按钮可见 */
+@media (max-width: 640px) {
+    .oe-brand__author,
+    .oe-bar__meta {
+        display: none;
+    }
+
+    .oe-bar {
+        gap: 8px;
+        padding: 10px 12px;
+    }
+}
+
+.oe-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        transform 120ms ease;
+}
+
+.oe-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.oe-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.oe-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.oe-btn--primary {
+    border-color: transparent;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+
+.oe-btn--primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+/* ---------- 代码 ---------- */
+
+.oe-code__body {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px 0 64px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+.oe-code__gutter {
+    flex: none;
+    padding: 0 14px 0 16px;
+    border-right: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-faint);
+    text-align: right;
+    white-space: pre;
+    user-select: none !important;
+}
+
+.oe-code__scroll {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.oe-code__pre {
+    margin: 0;
+    padding: 0 16px 0 14px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    white-space: pre;
+    tab-size: 4;
+}
+
+.oe-t-comment {
+    color: var(--syntax-comment);
+    font-style: italic;
+}
+
+.oe-t-key {
+    color: var(--syntax-key);
+}
+
+.oe-t-string {
+    color: var(--syntax-string);
+}
+
+.oe-t-number {
+    color: var(--syntax-number);
+}
+
+.oe-t-keyword {
+    color: var(--syntax-keyword);
+}
+
+.oe-t-literal {
+    color: var(--syntax-literal);
+}
+
+.oe-t-regex {
+    color: var(--syntax-regex);
+}
+
+.oe-t-variable {
+    color: var(--syntax-variable);
+}
+
+.oe-t-operator {
+    color: var(--syntax-punct);
+}
