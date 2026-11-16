@@ -1,4 +1,5 @@
 import type { FeatureDefinition } from '@/features/types';
+import bilibiliDownload from './bilibili-download';
 import codeViewer from './code-viewer';
 import unlockCopy from './unlock-copy';
 import webrtcGuard from './webrtc-guard';
@@ -10,5 +11,6 @@ import webrtcGuard from './webrtc-guard';
 export const features: readonly FeatureDefinition[] = [
   unlockCopy,
   codeViewer,
+  bilibiliDownload,
   webrtcGuard,
 ];

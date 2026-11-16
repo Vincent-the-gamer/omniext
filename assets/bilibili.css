@@ -1,0 +1,311 @@
+/**
+ * B 站直链下载的界面样式。
+ *
+ * 入口按钮是页面外的一层浮层（不能插进 B 站的 DOM：视频页是 SSR 渲染的，
+ * 改动它的容器会让 `bili-header` 的 hydration 失败），视觉上贴到工具栏左侧，
+ * 沿用 B 站的字号与灰蓝色文字、悬停变蓝；面板是一张深色浮层，配色与扩展的
+ * 查看器、弹窗保持一致。所有类名都带 `oe-bili-` 前缀，普通网页不会命中。
+ */
+
+/* ---------- 工具栏入口 ---------- */
+
+.oe-bili-entry-host {
+    position: absolute;
+    z-index: 1001;
+    margin: 0;
+    padding: 0;
+}
+
+.oe-bili-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 0 2px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #61666d;
+    font-family:
+        -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 20px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        color 160ms ease,
+        background 160ms ease;
+}
+
+.oe-bili-entry:hover,
+.oe-bili-entry--on {
+    color: #00aeec;
+    background: rgba(0, 174, 236, 0.08);
+}
+
+.oe-bili-entry__icon {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* ---------- 直链面板 ---------- */
+
+.oe-bili-panel {
+    color-scheme: dark;
+
+    --oe-bili-bg: #101113;
+    --oe-bili-surface: #17191c;
+    --oe-bili-border: rgba(255, 255, 255, 0.1);
+    --oe-bili-text: #f2f4f5;
+    --oe-bili-muted: #9aa0a8;
+    --oe-bili-faint: #71777e;
+    --oe-bili-accent: #00dc82;
+    --oe-bili-danger: #ff8fb3;
+
+    position: fixed;
+    z-index: 2147483000;
+    display: flex;
+    flex-direction: column;
+    width: 380px;
+    max-width: calc(100vw - 16px);
+    max-height: min(70vh, 520px);
+    padding: 12px 14px 10px;
+    border: 1px solid var(--oe-bili-border);
+    border-radius: 12px;
+    background: var(--oe-bili-bg);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    color: var(--oe-bili-text);
+    font-family:
+        -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.oe-bili-panel *,
+.oe-bili-panel *::before,
+.oe-bili-panel *::after {
+    box-sizing: border-box;
+}
+
+.oe-bili-panel [hidden] {
+    display: none !important;
+}
+
+.oe-bili-panel :focus-visible {
+    outline: 2px solid var(--oe-bili-accent);
+    outline-offset: 2px;
+}
+
+.oe-bili-panel__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.oe-bili-panel__title {
+    flex: 1;
+    min-width: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.oe-bili-panel__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--oe-bili-faint);
+    cursor: pointer;
+    transition:
+        color 160ms ease,
+        background 160ms ease;
+}
+
+.oe-bili-panel__close:hover {
+    color: var(--oe-bili-text);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.oe-bili-panel__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: none;
+    margin-top: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--oe-bili-border);
+}
+
+.oe-bili-panel__name {
+    overflow: hidden;
+    color: var(--oe-bili-text);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oe-bili-panel__sub {
+    color: var(--oe-bili-faint);
+    font-family:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+}
+
+.oe-bili-panel__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    margin: 0 -14px;
+    padding: 4px 14px;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    scrollbar-width: thin;
+}
+
+.oe-bili-panel__message {
+    margin: 12px 0;
+    color: var(--oe-bili-muted);
+    font-size: 12.5px;
+}
+
+.oe-bili-panel__foot {
+    flex: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--oe-bili-border);
+}
+
+.oe-bili-panel__note {
+    margin: 0;
+    color: var(--oe-bili-faint);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.oe-bili-panel__note + .oe-bili-panel__note {
+    margin-top: 4px;
+}
+
+/* ---------- 分组与轨道 ---------- */
+
+.oe-bili-group {
+    margin-top: 10px;
+}
+
+.oe-bili-group__title {
+    margin: 0 0 2px;
+    color: var(--oe-bili-faint);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.oe-bili-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.oe-bili-row:last-child {
+    border-bottom: 0;
+}
+
+.oe-bili-row__info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
+}
+
+.oe-bili-row__label {
+    overflow: hidden;
+    color: var(--oe-bili-text);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.oe-bili-row__detail {
+    color: var(--oe-bili-faint);
+    font-size: 11px;
+}
+
+.oe-bili-row__status {
+    color: var(--oe-bili-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.oe-bili-row__status--done {
+    color: var(--oe-bili-accent);
+}
+
+.oe-bili-row__status--error {
+    color: var(--oe-bili-danger);
+}
+
+.oe-bili-row__actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+}
+
+/* ---------- 按钮 ---------- */
+
+.oe-bili-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--oe-bili-border);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--oe-bili-text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+        background 160ms ease,
+        border-color 160ms ease;
+}
+
+.oe-bili-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.oe-bili-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.oe-bili-btn--primary {
+    border-color: transparent;
+    background: var(--oe-bili-accent);
+    color: #041611;
+    font-weight: 600;
+}
+
+.oe-bili-btn--primary:hover:not(:disabled) {
+    background: #2fe89d;
+}

@@ -2,6 +2,8 @@ import { defineContentScript } from '#imports';
 import { startFeatureHost } from '@/features/host';
 // 查看器样式随内容脚本一起注入：页面 CSP 不会拦截，普通网页也不会命中这些类名。
 import '@/assets/viewer.css';
+// B 站直链下载的入口按钮与面板，同样只命中 `oe-bili-` 前缀的类名。
+import '@/assets/bilibili.css';
 
 /**
  * 所有功能共用的内容脚本入口。

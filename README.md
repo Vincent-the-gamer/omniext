@@ -15,6 +15,7 @@ apply browser-wide.
 
 - **Unlock copy restrictions** — restores selecting, copying and right-clicking on sites that block them.
 - **Code viewer** — pretty-prints JSON pages and highlights JavaScript, TypeScript and shell scripts opened as plain text, all in one layout.
+- **Bilibili direct download** — adds a download entry under Bilibili videos that lists the direct video and audio links for the page you are on.
 - **WebRTC Network Limiter** — sets Chrome's WebRTC IP policy so a site cannot read your real or local IP.
 
 More features coming soon.
