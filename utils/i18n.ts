@@ -116,6 +116,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'bili-reason-http-error': 'The CDN refused the request.',
     'bili-reason-network': 'The download was interrupted.',
     'bili-reason-mux-failed': 'Merging failed — download the tracks separately.',
+    'gh-folder-download': 'Download this folder',
   },
   zh: {
     settings: '设置',
@@ -202,6 +203,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'bili-reason-http-error': 'CDN 拒绝了这次请求。',
     'bili-reason-network': '下载中断了。',
     'bili-reason-mux-failed': '合并失败，请分开下载视频轨和音频轨。',
+    'gh-folder-download': '下载当前文件夹',
   },
 };
 
