@@ -5,7 +5,7 @@ import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
 import { useFeatures, type FeatureRow } from "@/composables/use-features";
 import { useLocale } from "@/composables/use-locale";
-import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
+import { APP_AUTHOR, APP_REPO_URL, APP_VERSION } from "@/utils/app";
 import {
     isFeatureActive,
     matchedRules,
@@ -20,6 +20,7 @@ const { rows, update } = useFeatures();
 
 const version = APP_VERSION;
 const author = APP_AUTHOR;
+const repoUrl = APP_REPO_URL;
 
 const page = ref<PageInfo | null>(null);
 const hostname = computed(() => page.value?.hostname ?? "");
@@ -139,7 +140,7 @@ async function openOptions(): Promise<void> {
 
             <div class="head__text">
                 <div class="head__title">
-                    <span class="head__name">Omniext</span>
+                    <a class="head__name" :href="repoUrl" target="_blank" rel="noopener noreferrer">Omniext</a>
                     <span class="head__version">v{{ version }}</span>
                 </div>
                 <span v-if="author" class="head__author">{{ author }}</span>
@@ -332,6 +333,12 @@ async function openOptions(): Promise<void> {
     font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.01em;
+    text-decoration: none;
+    color: inherit;
+}
+
+.head__name:hover {
+    color: var(--accent);
 }
 
 .head__version {
