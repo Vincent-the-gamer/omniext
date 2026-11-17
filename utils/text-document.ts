@@ -138,6 +138,11 @@ function readPlainText(): string | null {
  * 最长的 `<pre>`，这样仍然能拿到源码并用我们自己的页面接管。
  */
 export function readDocumentText(): string | null {
+  // 普通 HTML 页面（例如博客、文档站）里可能也包含 <pre> 代码块，
+  // 但它们不是"浏览器直接打开的纯文本文件"，绝不能被当作源码接管。
+  const contentType = document.contentType.toLowerCase();
+  if (contentType.includes('html')) return null;
+
   const plain = readPlainText();
   if (plain !== null) return plain;
 
