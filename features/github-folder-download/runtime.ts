@@ -34,9 +34,36 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
   let active = false;
   let locale: Locale = 'en';
 
-  let button: HTMLButtonElement | null = null;
-  let syncTimer: number | null = null;
-  let unwatchLocale: (() => void) | null = null;
+  let downloadFrame: HTMLIFrameElement | null = null;
+  let downloadTimer: number | null = null;
+
+  function triggerDownload(): void {
+    // 复用上一次的隐藏 iframe，避免连续点击堆积多个下载任务。
+    if (downloadFrame !== null) {
+      downloadFrame.remove();
+      downloadFrame = null;
+    }
+    if (downloadTimer !== null) {
+      window.clearTimeout(downloadTimer);
+      downloadTimer = null;
+    }
+
+    const frame = document.createElement('iframe');
+    frame.src = `${DOWNLOAD_SERVICE}?url=${encodeURIComponent(location.href)}`;
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    frame.style.cssText =
+      'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+    (document.body ?? document.documentElement).append(frame);
+    downloadFrame = frame;
+
+    // 服务端在浏览器里抓取并打包，耗时不定；给足时间后再清理。
+    downloadTimer = window.setTimeout(() => {
+      frame.remove();
+      if (downloadFrame === frame) downloadFrame = null;
+      downloadTimer = null;
+    }, 90000);
+  }
 
   function ensureStyles(): void {
     if (document.getElementById(`${BUTTON_ID}-style`) !== null) return;
@@ -116,8 +143,7 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
     btn.append(label);
 
     btn.addEventListener('click', () => {
-      const url = `${DOWNLOAD_SERVICE}?url=${encodeURIComponent(location.href)}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
+      triggerDownload();
     });
 
     return btn;
@@ -198,6 +224,14 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
       active = false;
       stopSyncLoop();
       removeButton();
+      if (downloadFrame !== null) {
+        downloadFrame.remove();
+        downloadFrame = null;
+      }
+      if (downloadTimer !== null) {
+        window.clearTimeout(downloadTimer);
+        downloadTimer = null;
+      }
 
       unwatchLocale?.();
       unwatchLocale = null;
