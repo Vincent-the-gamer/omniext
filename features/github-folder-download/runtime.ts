@@ -7,6 +7,8 @@ const BUTTON_CLASS = 'oe-gh-folder-download';
 const SYNC_INTERVAL_MS = 400;
 const DOWNLOAD_SERVICE = 'https://download-directory.github.io/';
 
+const FOLDER_DOWN_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m15 13-3 3-3-3"/></svg>`;
+
 /** 判断当前地址是否为仓库的文件夹视图（`/owner/repo/tree/…`）。 */
 function isFolderView(): boolean {
   if (location.hostname !== GITHUB_HOST) return false;
@@ -44,54 +46,51 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
     style.textContent = `
       #${BUTTON_ID} {
         position: fixed;
-        right: 20px;
-        bottom: 20px;
+        right: 16px;
+        bottom: 16px;
         z-index: 2147483647;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 48px;
-        height: 48px;
-        border: none;
-        border-radius: 50%;
-        background: #0969da;
-        color: #ffffff;
-        font-size: 22px;
+        gap: 8px;
+        height: 40px;
+        padding: 0 16px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: #00dc82;
+        color: #041611;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        font-size: 13px;
+        font-weight: 600;
         line-height: 1;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
         cursor: pointer;
         user-select: none;
-        transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
+        transition: background 160ms ease, transform 120ms ease, opacity 120ms ease, box-shadow 160ms ease;
       }
       #${BUTTON_ID}:hover {
-        background: #0550ae;
-        transform: translateY(-2px);
+        background: #2fe89d;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
       }
       #${BUTTON_ID}:active {
         transform: translateY(0);
       }
+      #${BUTTON_ID}:focus-visible {
+        outline: 2px solid #00dc82;
+        outline-offset: 2px;
+      }
       #${BUTTON_ID}[data-hidden="true"] {
         opacity: 0;
         pointer-events: none;
-        transform: scale(0.9);
+        transform: scale(0.96);
+      }
+      #${BUTTON_ID} svg {
+        flex: 0 0 auto;
       }
       #${BUTTON_ID} .oe-gh-label {
-        position: absolute;
-        right: 56px;
-        top: 50%;
-        transform: translateY(-50%);
-        white-space: nowrap;
-        background: rgba(0, 0, 0, 0.8);
-        color: #ffffff;
-        font-size: 12px;
-        padding: 4px 8px;
-        border-radius: 4px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 120ms ease;
-      }
-      #${BUTTON_ID}:hover .oe-gh-label {
-        opacity: 1;
+        display: inline-block;
       }
     `;
     (document.head ?? document.documentElement).append(style);
@@ -102,16 +101,18 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
     btn.id = BUTTON_ID;
     btn.className = BUTTON_CLASS;
     btn.type = 'button';
-    btn.setAttribute('aria-label', translate(locale, 'gh-folder-download'));
-    btn.title = translate(locale, 'gh-folder-download');
+
+    const text = translate(locale, 'gh-folder-download');
+    btn.setAttribute('aria-label', text);
+    btn.title = text;
 
     const icon = document.createElement('span');
-    icon.textContent = '📥';
+    icon.innerHTML = FOLDER_DOWN_ICON;
     btn.append(icon);
 
     const label = document.createElement('span');
     label.className = 'oe-gh-label';
-    label.textContent = translate(locale, 'gh-folder-download');
+    label.textContent = text;
     btn.append(label);
 
     btn.addEventListener('click', () => {
@@ -143,7 +144,6 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
 
     if (!isFolderView()) {
       if (button !== null) button.setAttribute('data-hidden', 'true');
-      // 保留节点以便快速复用，但隐藏；离开页面时再移除。
       return;
     }
 
