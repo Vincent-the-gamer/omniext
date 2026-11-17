@@ -5,7 +5,7 @@ import FeatureCard from "@/components/FeatureCard.vue";
 import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import { useFeatures } from "@/composables/use-features";
 import { useLocale } from "@/composables/use-locale";
-import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
+import { APP_AUTHOR, APP_REPO_URL, APP_VERSION } from "@/utils/app";
 import {
     BackupError,
     createBackup,
@@ -18,6 +18,7 @@ const { rows, ready, update } = useFeatures();
 
 const version = APP_VERSION;
 const author = APP_AUTHOR;
+const repoUrl = APP_REPO_URL;
 const enabledCount = computed(
     () => rows.value.filter((row) => row.settings.enabled).length,
 );
@@ -117,7 +118,7 @@ async function importConfig(event: Event): Promise<void> {
                     width="24"
                     height="24"
                 />
-                <span class="nav__name">Omniext</span>
+                <a class="nav__name" :href="repoUrl" target="_blank" rel="noopener noreferrer">Omniext</a>
                 <span class="nav__version">v{{ version }}</span>
                 <span class="nav__author">by {{ author }}</span>
             </div>
@@ -256,6 +257,12 @@ async function importConfig(event: Event): Promise<void> {
     font-size: 15px;
     font-weight: 600;
     letter-spacing: -0.01em;
+    text-decoration: none;
+    color: inherit;
+}
+
+.nav__name:hover {
+    color: var(--accent);
 }
 
 .nav__version {

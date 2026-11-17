@@ -8,6 +8,9 @@ import { browser } from '#imports';
  */
 export const APP_AUTHOR = 'Vincent-the-gamer';
 
+/** 仓库主页链接，界面里的作者名点过去就是这里。 */
+export const APP_REPO_URL = 'https://github.com/Vincent-the-gamer/omniext';
+
 const manifest = browser.runtime.getManifest() as {
   version: string;
   version_name?: string;
