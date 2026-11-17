@@ -37,6 +37,10 @@ export function createGitHubFolderDownloadRuntime(): FeatureRuntime {
   let downloadFrame: HTMLIFrameElement | null = null;
   let downloadTimer: number | null = null;
 
+  let button: HTMLButtonElement | null = null;
+  let syncTimer: number | null = null;
+  let unwatchLocale: (() => void) | null = null;
+
   function triggerDownload(): void {
     // 复用上一次的隐藏 iframe，避免连续点击堆积多个下载任务。
     if (downloadFrame !== null) {
