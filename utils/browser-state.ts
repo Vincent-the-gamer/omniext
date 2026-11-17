@@ -1,6 +1,6 @@
 import { browser } from '#imports';
 import type { BrowserState, FeatureDefinition } from '@/features/types';
-import { BROWSER_STATE_MESSAGE } from '@/utils/messaging';
+import { BROWSER_STATE_MESSAGE, type BrowserStateRequest } from '@/utils/messaging';
 
 /**
  * 读取一个全局功能在浏览器里的真实状态。
@@ -16,10 +16,11 @@ export async function readFeatureBrowserState(
   if (!read) return { supported: true, values: {} };
 
   try {
-    const reply = await browser.runtime.sendMessage({
+    const request: BrowserStateRequest = {
       type: BROWSER_STATE_MESSAGE,
       featureId: feature.id,
-    });
+    };
+    const reply = await browser.runtime.sendMessage(request);
 
     if (reply && typeof reply === 'object' && typeof reply.supported === 'boolean') {
       return reply as BrowserState;

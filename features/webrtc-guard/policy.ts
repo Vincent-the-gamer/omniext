@@ -2,21 +2,6 @@ import { browser } from '#imports';
 import type { BrowserState } from '@/features/types';
 import type { FeatureSettings } from '@/utils/feature-settings';
 
-/**
- * WebRTC 的 IP 处理策略，取值与 `chrome.privacy.IPHandlingPolicy` 一致：
- *
- * - `default`：不做限制（浏览器默认）
- * - `default_public_and_private_interfaces`：只用默认公网地址 + 默认私网地址
- * - `default_public_interface_only`：只用默认公网地址，不暴露局域网 IP
- * - `disable_non_proxied_udp`：WebRTC 的 UDP 必须走代理，没有代理时几乎等于
- *   禁用 WebRTC —— 这是最严格的选项，真实 IP 不会泄露
- */
-export type WebRtcIpPolicy =
-  | 'default'
-  | 'default_public_and_private_interfaces'
-  | 'default_public_interface_only'
-  | 'disable_non_proxied_udp';
-
 interface PolicyDetails {
   value?: string;
   levelOfControl?: string;
