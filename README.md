@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="public/banner.png" style="height: 900px;"/>
+    <img src="public/banner.png" style="width: 1000px;"/>
     <h1>Omniext</h1>
     <p>Omnipotent browser extension.</p>
 </div>
