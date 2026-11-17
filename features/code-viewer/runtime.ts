@@ -36,11 +36,14 @@ export function createCodeViewerRuntime(): FeatureRuntime {
     if (text === null) return;
 
     const detected = detectTextDocumentKind();
+    // 普通 HTML 页面（博客、文档站等）里即使有 <pre> 代码块，也不是源码文件，
+    // 绝不能接管。detectTextDocumentKind 对 HTML 已经返回 null，这里再做一次兜底。
+    if (detected === null && !isPlainTextDocument()) return;
 
     let language: Language | null = detected;
     let display = text;
 
-    if (detected === 'json' || (detected === null && startsWithJson(text))) {
+    if (detected === 'json' || (detected === null && isPlainTextDocument() && startsWithJson(text))) {
       const parsed = parseJson(text);
 
       if (parsed.ok) {
