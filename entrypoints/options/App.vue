@@ -1,11 +1,17 @@
 <script lang="ts" setup>
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import CursorGlow from "@/components/CursorGlow.vue";
 import FeatureCard from "@/components/FeatureCard.vue";
 import LanguageSwitch from "@/components/LanguageSwitch.vue";
 import { useFeatures } from "@/composables/use-features";
 import { useLocale } from "@/composables/use-locale";
 import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
+import {
+    BackupError,
+    createBackup,
+    importBackup,
+    saveBackup,
+} from "@/utils/config-backup";
 
 const { locale, setLocale, t } = useLocale();
 const { rows, ready, update } = useFeatures();
@@ -25,6 +31,77 @@ function applyTitle(): void {
 }
 applyTitle();
 watch(locale, applyTitle);
+
+/** 导出/导入操作的提示；空字符串表示还没操作过。 */
+const backupNote = ref("");
+const backupFailed = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function setBackupNote(text: string, failed: boolean): void {
+    backupNote.value = text;
+    backupFailed.value = failed;
+}
+
+/** 导出：把当前设置写成 JSON 文件，重装或换浏览器后可以导回来。 */
+async function exportConfig(): Promise<void> {
+    try {
+        const backup = await createBackup();
+        saveBackup(backup);
+        setBackupNote(
+            t("config-exported", {
+                count: Object.keys(backup.features).length,
+            }),
+            false,
+        );
+    } catch (error) {
+        setBackupNote(
+            t("config-failed", { reason: errorMessage(error) }),
+            true,
+        );
+    }
+}
+
+function pickImport(): void {
+    fileInput.value?.click();
+}
+
+async function importConfig(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    // 清空 value，否则连续选同一个文件不会再触发 change。
+    input.value = "";
+    if (!file) return;
+
+    try {
+        const result = await importBackup(await file.text());
+        setBackupNote(
+            result.applied > 0
+                ? t("config-imported", { count: result.applied })
+                : t("config-import-empty"),
+            false,
+        );
+    } catch (error) {
+        if (error instanceof BackupError) {
+            setBackupNote(
+                t(
+                    error.code === "unreadable"
+                        ? "config-invalid-json"
+                        : "config-invalid-format",
+                ),
+                true,
+            );
+            return;
+        }
+        setBackupNote(
+            t("config-failed", { reason: errorMessage(error) }),
+            true,
+        );
+    }
+}
 </script>
 
 <template>
@@ -44,14 +121,12 @@ watch(locale, applyTitle);
                 <span class="nav__version">v{{ version }}</span>
                 <span class="nav__author">by {{ author }}</span>
             </div>
-            <span class="nav__state"
-                >{{
-                    t("features-enabled", {
-                        enabled: enabledCount,
-                        total: rows.length,
-                    })
-                }}</span
-            >
+            <span class="nav__state">{{
+                t("features-enabled", {
+                    enabled: enabledCount,
+                    total: rows.length,
+                })
+            }}</span>
             <LanguageSwitch :value="locale" @change="setLocale" />
         </header>
 
@@ -67,7 +142,9 @@ watch(locale, applyTitle);
                 </span>
 
                 <h1 class="hero__title" data-enter>
-                    {{ t("hero-line1") }}<br /><span>{{ t("hero-line2") }}</span>
+                    {{ t("hero-line1") }}<br /><span>{{
+                        t("hero-line2")
+                    }}</span>
                 </h1>
 
                 <p class="hero__lede" data-enter>
@@ -82,8 +159,44 @@ watch(locale, applyTitle);
             >
                 <div class="features__head">
                     <h2 id="features-title">{{ t("features-label") }}</h2>
-                    <span>{{ t("feature-count", { count: rows.length }) }}</span>
+                    <div class="features__tools">
+                        <span class="features__count">{{
+                            t("feature-count", { count: rows.length })
+                        }}</span>
+                        <button
+                            type="button"
+                            class="btn btn--ghost btn--sm"
+                            :disabled="!ready"
+                            @click="exportConfig"
+                        >
+                            {{ t("config-export") }}
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn--ghost btn--sm"
+                            :disabled="!ready"
+                            @click="pickImport"
+                        >
+                            {{ t("config-import") }}
+                        </button>
+                        <input
+                            ref="fileInput"
+                            type="file"
+                            accept="application/json,.json"
+                            hidden
+                            @change="importConfig"
+                        />
+                    </div>
                 </div>
+
+                <p
+                    v-if="backupNote"
+                    class="features__note"
+                    :class="{ 'features__note--error': backupFailed }"
+                    role="status"
+                >
+                    {{ backupNote }}
+                </p>
 
                 <p v-if="!ready" class="loading">{{ t("loading") }}</p>
 
@@ -219,11 +332,45 @@ watch(locale, applyTitle);
 
 .features__head {
     display: flex;
-    align-items: baseline;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
+}
+
+.features__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.features__tools .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.features__tools .btn:disabled:hover {
+    background: transparent;
+}
+
+.features__count {
+    margin-right: 2px;
+    font-size: 12.5px;
+    color: var(--text-faint);
+}
+
+.features__note {
+    margin: 12px 0 0;
+    font-size: 12.5px;
+    color: var(--accent);
+}
+
+.features__note--error {
+    color: var(--amber);
 }
 
 .features__head h2 {
@@ -231,11 +378,6 @@ watch(locale, applyTitle);
     font-size: 18px;
     font-weight: 600;
     letter-spacing: -0.01em;
-}
-
-.features__head span {
-    font-size: 12.5px;
-    color: var(--text-faint);
 }
 
 .features__list {

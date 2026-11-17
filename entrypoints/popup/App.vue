@@ -15,10 +15,6 @@ import {
 import { localized } from "@/utils/i18n";
 import { PAGE_INFO_MESSAGE, type PageInfo } from "@/utils/messaging";
 
-const manifest = browser.runtime.getManifest() as {
-    version: string;
-    author?: string;
-};
 const { locale, setLocale, t } = useLocale();
 const { rows, update } = useFeatures();
 
@@ -186,12 +182,12 @@ async function openOptions(): Promise<void> {
             <span v-if="hostname" class="site__host" :title="page?.url">{{
                 hostname
             }}</span>
-            <span v-else class="site__host site__host--muted"
-                >{{ t("browser-page") }}</span
-            >
-            <span v-if="hostname" class="site__count"
-                >{{ t("active-count", { active: activeCount, total: rows.length }) }}</span
-            >
+            <span v-else class="site__host site__host--muted">{{
+                t("browser-page")
+            }}</span>
+            <span v-if="hostname" class="site__count">{{
+                t("active-count", { active: activeCount, total: rows.length })
+            }}</span>
         </div>
 
         <div class="scroll">
@@ -238,9 +234,18 @@ async function openOptions(): Promise<void> {
                         <span class="dot" aria-hidden="true">·</span>
                         <span class="scope">{{ scopeLabel(row) }}</span>
                         <span
-                            v-if="isGlobal(row) && row.settings.enabled && modeLabel(row)"
+                            v-if="
+                                isGlobal(row) &&
+                                row.settings.enabled &&
+                                modeLabel(row)
+                            "
                             class="chip chip--accent"
-                            :title="localized(row.feature.options?.[0]?.label ?? '', locale)"
+                            :title="
+                                localized(
+                                    row.feature.options?.[0]?.label ?? '',
+                                    locale,
+                                )
+                            "
                         >
                             {{ modeLabel(row) }}
                         </span>

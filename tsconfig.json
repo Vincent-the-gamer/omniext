@@ -1,9 +1,3 @@
 {
   "extends": "./.wxt/tsconfig.json",
-  "include": [
-    "./.wxt/wxt.d.ts",
-    "./features/**/*.ts",
-    "./utils/**/*.ts",
-    "./entrypoints/*.ts",
-  ],
 }
