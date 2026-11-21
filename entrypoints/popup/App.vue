@@ -2,10 +2,12 @@
 import { computed, onMounted, ref } from "vue";
 import { browser } from "#imports";
 import LanguageSwitch from "@/components/LanguageSwitch.vue";
+import SearchField from "@/components/SearchField.vue";
 import ToggleSwitch from "@/components/ToggleSwitch.vue";
 import { useFeatures, type FeatureRow } from "@/composables/use-features";
 import { useLocale } from "@/composables/use-locale";
 import { APP_AUTHOR, APP_REPO_URL, APP_VERSION } from "@/utils/app";
+import { matchesFeatureQuery } from "@/utils/feature-search";
 import {
     isFeatureActive,
     matchedRules,
@@ -16,7 +18,7 @@ import { localized } from "@/utils/i18n";
 import { PAGE_INFO_MESSAGE, type PageInfo } from "@/utils/messaging";
 
 const { locale, setLocale, t } = useLocale();
-const { rows, update } = useFeatures();
+const { rows, ready, update } = useFeatures();
 
 const version = APP_VERSION;
 const author = APP_AUTHOR;
@@ -29,6 +31,14 @@ const activeCount = computed(
         rows.value.filter((row) =>
             isFeatureActive(row.settings, hostname.value),
         ).length,
+);
+
+/** 搜索关键词，只影响列表里显示哪些功能，不改动任何设置。 */
+const query = ref("");
+const visibleRows = computed(() =>
+    rows.value.filter((row) =>
+        matchesFeatureQuery(row.feature, locale.value, query.value),
+    ),
 );
 
 onMounted(async () => {
@@ -140,7 +150,13 @@ async function openOptions(): Promise<void> {
 
             <div class="head__text">
                 <div class="head__title">
-                    <a class="head__name" :href="repoUrl" target="_blank" rel="noopener noreferrer">Omniext</a>
+                    <a
+                        class="head__name"
+                        :href="repoUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Omniext</a
+                    >
                     <span class="head__version">v{{ version }}</span>
                 </div>
                 <span v-if="author" class="head__author">{{ author }}</span>
@@ -191,10 +207,14 @@ async function openOptions(): Promise<void> {
             }}</span>
         </div>
 
+        <div class="search-row">
+            <SearchField v-model="query" />
+        </div>
+
         <div class="scroll">
             <ul class="list">
                 <li
-                    v-for="row in rows"
+                    v-for="row in visibleRows"
                     :key="row.feature.id"
                     class="card feature"
                 >
@@ -287,6 +307,17 @@ async function openOptions(): Promise<void> {
                     </div>
                 </li>
             </ul>
+
+            <div
+                v-if="ready && query && visibleRows.length === 0"
+                class="empty"
+                role="status"
+            >
+                <p>{{ t("search-empty", { query }) }}</p>
+                <button class="link" type="button" @click="query = ''">
+                    {{ t("search-clear") }}
+                </button>
+            </div>
         </div>
 
         <footer class="foot">
@@ -399,6 +430,28 @@ async function openOptions(): Promise<void> {
     font-family: var(--mono);
     font-size: 11px;
     color: var(--text-faint);
+}
+
+/* ---------- 搜索 ---------- */
+
+.search-row {
+    flex: none;
+    padding: 10px 16px 0;
+}
+
+.empty {
+    margin: 18px 0 0;
+    text-align: center;
+}
+
+.empty p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-faint);
+}
+
+.empty .link {
+    margin-top: 6px;
 }
 
 /* ---------- 功能列表（内容多了在这里滚动） ---------- */

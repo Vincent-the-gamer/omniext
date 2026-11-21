@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import CursorGlow from "@/components/CursorGlow.vue";
 import FeatureCard from "@/components/FeatureCard.vue";
 import LanguageSwitch from "@/components/LanguageSwitch.vue";
+import SearchField from "@/components/SearchField.vue";
 import { useFeatures } from "@/composables/use-features";
 import { useLocale } from "@/composables/use-locale";
 import { APP_AUTHOR, APP_REPO_URL, APP_VERSION } from "@/utils/app";
@@ -12,6 +13,7 @@ import {
     importBackup,
     saveBackup,
 } from "@/utils/config-backup";
+import { matchesFeatureQuery } from "@/utils/feature-search";
 
 const { locale, setLocale, t } = useLocale();
 const { rows, ready, update } = useFeatures();
@@ -24,6 +26,14 @@ const enabledCount = computed(
 );
 const ruleCount = computed(() =>
     rows.value.reduce((total, row) => total + row.settings.rules.length, 0),
+);
+
+/** 搜索关键词，只过滤列表，不影响任何已保存的设置。 */
+const query = ref("");
+const visibleRows = computed(() =>
+    rows.value.filter((row) =>
+        matchesFeatureQuery(row.feature, locale.value, query.value),
+    ),
 );
 
 /** 浏览器标签上的标题也要跟随语言。 */
@@ -118,7 +128,13 @@ async function importConfig(event: Event): Promise<void> {
                     width="24"
                     height="24"
                 />
-                <a class="nav__name" :href="repoUrl" target="_blank" rel="noopener noreferrer">Omniext</a>
+                <a
+                    class="nav__name"
+                    :href="repoUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Omniext</a
+                >
                 <span class="nav__version">v{{ version }}</span>
                 <span class="nav__author">by {{ author }}</span>
             </div>
@@ -161,8 +177,14 @@ async function importConfig(event: Event): Promise<void> {
                 <div class="features__head">
                     <h2 id="features-title">{{ t("features-label") }}</h2>
                     <div class="features__tools">
+                        <SearchField v-model="query" class="features__search" />
                         <span class="features__count">{{
-                            t("feature-count", { count: rows.length })
+                            query
+                                ? t("search-match", {
+                                      matched: visibleRows.length,
+                                      total: rows.length,
+                                  })
+                                : t("feature-count", { count: rows.length })
                         }}</span>
                         <button
                             type="button"
@@ -203,12 +225,27 @@ async function importConfig(event: Event): Promise<void> {
 
                 <div v-else class="features__list">
                     <FeatureCard
-                        v-for="row in rows"
+                        v-for="row in visibleRows"
                         :key="row.feature.id"
                         :feature="row.feature"
                         :settings="row.settings"
                         @change="update(row, $event)"
                     />
+                </div>
+
+                <div
+                    v-if="ready && query && visibleRows.length === 0"
+                    class="features__empty"
+                    role="status"
+                >
+                    <p>{{ t("search-empty", { query }) }}</p>
+                    <button
+                        type="button"
+                        class="btn btn--ghost btn--sm"
+                        @click="query = ''"
+                    >
+                        {{ t("search-clear") }}
+                    </button>
                 </div>
             </section>
         </main>
@@ -368,6 +405,28 @@ async function importConfig(event: Event): Promise<void> {
     margin-right: 2px;
     font-size: 12.5px;
     color: var(--text-faint);
+}
+
+.features__search {
+    width: 200px;
+}
+
+.features__empty {
+    margin-top: 18px;
+    padding: 32px 20px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.features__empty p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.features__empty .btn {
+    margin-top: 10px;
 }
 
 .features__note {
