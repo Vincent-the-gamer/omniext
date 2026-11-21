@@ -830,6 +830,38 @@ function copyText(text: string): void {
   box-shadow: 0 0 0 3px rgba(0, 220, 130, 0.12);
 }
 
+.ni__type-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.ni__type-chip {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--ni-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ni-muted);
+  font-family: var(--ni-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.ni__type-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ni-text);
+}
+
+.ni__type-chip--active {
+  border-color: rgba(0, 220, 130, 0.4);
+  background: var(--ni-accent-soft);
+  color: var(--ni-accent);
+}
+
 .ni__method-filter {
   display: flex;
   flex-wrap: wrap;
