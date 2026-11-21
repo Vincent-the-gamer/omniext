@@ -20,6 +20,7 @@ apply browser-wide.
 - **Bilibili direct download** — adds a download entry to Bilibili video pages that lists the direct video and audio links for the page you are on.
 - **WebRTC Network Limiter** — sets Chrome's WebRTC IP policy so a site cannot read your real or local IP.
 - **GitHub Folder Download** - download any sub-folder of GitHub repository.
+- **Network Inspector** - Add card into devtool, providing send request to Postman. 
 
 More features coming soon.
 
