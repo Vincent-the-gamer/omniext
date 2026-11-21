@@ -2,9 +2,16 @@
   <div class="ni">
     <header class="ni__bar">
       <div class="ni__brand">
-        <span class="ni__logo">⬡</span>
-        <span class="ni__title">Network Inspector</span>
-        <span class="ni__subtitle">DevTools capture</span>
+        <img class="ni__logo" :src="logoUrl" alt="" width="22" height="22" />
+        <div class="ni__brand-text">
+          <div class="ni__brand-title">
+            <span class="ni__name">Omniext</span>
+            <span class="ni__version">v{{ version }}</span>
+            <span class="ni__sep">·</span>
+            <span class="ni__panel-name">Network Inspector</span>
+          </div>
+          <span class="ni__author">{{ author }}</span>
+        </div>
       </div>
       <div class="ni__controls">
         <input
@@ -14,9 +21,31 @@
           placeholder="Filter by URL, method, status, mime…"
           spellcheck="false"
         />
-        <select v-model="methodFilter" class="ni__select">
-          <option v-for="m in methods" :key="m" :value="m">{{ m }}</option>
-        </select>
+        <div class="ni__type-filter">
+          <button
+            v-for="t in TYPE_FILTERS"
+            :key="t.key"
+            class="ni__type-chip"
+            :class="{ 'ni__type-chip--active': typeFilters.has(t.key) }"
+            type="button"
+            :title="t.label"
+            @click="toggleType(t.key)"
+          >
+            {{ t.icon }} {{ t.label }}
+          </button>
+        </div>
+        <div class="ni__method-filter">
+          <button
+            v-for="m in allMethods"
+            :key="m"
+            class="ni__method-chip"
+            :class="{ 'ni__method-chip--active': selectedMethods.has(m) }"
+            type="button"
+            @click="toggleMethod(m)"
+          >
+            {{ m }}
+          </button>
+        </div>
         <button class="ni__btn ni__btn--ghost" type="button" @click="clearAll">Clear</button>
         <button class="ni__btn ni__btn--ghost" type="button" @click="exportPostman(false)">Export all</button>
         <button
@@ -84,7 +113,7 @@
 
           <nav class="detail__tabs">
             <button
-              v-for="tab in ['overview', 'headers', 'payload', 'response', 'timing']"
+              v-for="tab in ['overview', 'headers', 'payload', 'response', 'preview', 'timing']"
               :key="tab"
               class="detail__tab"
               :class="{ 'detail__tab--active': activeTab === tab }"
@@ -132,7 +161,7 @@
               </div>
               <div v-if="selected.queryString" class="header-section">
                 <h3>Query string</h3>
-                <pre class="code-block">{{ selected.queryString }}</pre>
+                <pre class="code-block" v-html="highlightCode(selected.queryString, 'text')"></pre>
               </div>
             </template>
 
@@ -142,7 +171,7 @@
                   <span>Request body</span>
                   <button class="mini-btn" type="button" @click="copyText(selected.requestBody)">Copy</button>
                 </div>
-                <pre class="code-block">{{ isJsonMime(selected.requestMimeType) ? prettyJson(selected.requestBody) : selected.requestBody }}</pre>
+                <pre class="code-block" v-html="highlightBody(selected.requestBody, selected.requestMimeType, true)"></pre>
               </div>
               <p v-else class="muted">No request body.</p>
             </template>
@@ -154,9 +183,25 @@
                   <span>Response body · {{ formatBytes(selected.responseBody.length) }}</span>
                   <button class="mini-btn" type="button" @click="copyText(selected.responseBody)">Copy</button>
                 </div>
-                <pre class="code-block">{{ isJsonMime(selected.mimeType) ? prettyJson(selected.responseBody) : selected.responseBody }}</pre>
+                <pre class="code-block" v-html="highlightBody(selected.responseBody, selected.mimeType, true)"></pre>
               </div>
               <p v-else class="muted">No response body (or not yet loaded).</p>
+            </template>
+
+            <template v-else-if="activeTab === 'preview'">
+              <div class="preview">
+                <template v-if="isImageMime(selected.mimeType)">
+                  <img :src="dataUrl(selected)" class="preview__img" :alt="urlName(selected.url)" />
+                </template>
+                <template v-else-if="isTextMime(selected.mimeType) && selected.responseBody">
+                  <pre class="code-block" v-html="highlightBody(selected.responseBody, selected.mimeType, true)"></pre>
+                </template>
+                <template v-else-if="selected.responseBody">
+                  <p class="muted">Binary resource ({{ selected.mimeType || 'unknown' }}). Download via "Send to Postman" or copy.</p>
+                  <pre class="code-block">{{ selected.responseBody.slice(0, 500) }}</pre>
+                </template>
+                <p v-else class="muted">No preview available.</p>
+              </div>
             </template>
 
             <template v-else-if="activeTab === 'timing'">
@@ -191,6 +236,12 @@
 /// <reference types="chrome" />
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { APP_AUTHOR, APP_VERSION } from '@/utils/app';
+import { highlightToLines } from '@/features/code-viewer/highlight';
+
+const version = APP_VERSION;
+const author = APP_AUTHOR;
+const logoUrl = (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.getURL('/icon/32.png') : '/icon/32.png';
 
 interface Header {
   name: string;
@@ -228,7 +279,48 @@ const METHOD_COLORS: Record<string, string> = {
   DELETE: '#f93e3e',
   HEAD: '#9012fe',
   OPTIONS: '#0d5aa7',
+  TRACE: '#6b7280',
+  CONNECT: '#6b7280',
 };
+
+const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT'];
+
+const TYPE_FILTERS = [
+  { key: 'all', icon: '🌐', label: 'All' },
+  { key: 'xhr', icon: '🔄', label: 'XHR' },
+  { key: 'fetch', icon: '📡', label: 'Fetch' },
+  { key: 'script', icon: '📜', label: 'JS' },
+  { key: 'stylesheet', icon: '🎨', label: 'CSS' },
+  { key: 'image', icon: '🖼️', label: 'Img' },
+  { key: 'font', icon: '🔤', label: 'Font' },
+  { key: 'media', icon: '🎬', label: 'Media' },
+  { key: 'document', icon: '📄', label: 'Doc' },
+  { key: 'websocket', icon: '🔌', label: 'WS' },
+  { key: 'other', icon: '📦', label: 'Other' },
+];
+
+function resourceTypeKey(r: NetRequest): string {
+  const t = (r.resourceType || '').toLowerCase();
+  if (t === 'xhr') return 'xhr';
+  if (t === 'fetch') return 'fetch';
+  if (t === 'script') return 'script';
+  if (t === 'stylesheet') return 'stylesheet';
+  if (t === 'image') return 'image';
+  if (t === 'font') return 'font';
+  if (t === 'media') return 'media';
+  if (t === 'document') return 'document';
+  if (t === 'websocket') return 'websocket';
+  const mime = (r.mimeType || '').toLowerCase();
+  if (mime.includes('javascript')) return 'script';
+  if (mime.includes('css')) return 'stylesheet';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('font/') || mime.includes('font')) return 'font';
+  if (mime.startsWith('video/') || mime.startsWith('audio/')) return 'media';
+  if (mime.includes('html')) return 'document';
+  return 'other';
+}
+
+const typeFilters = ref<Set<string>>(new Set(['all']));
 
 function statusTone(status: number): string {
   if (status === 0) return 'muted';
@@ -252,16 +344,39 @@ function formatTime(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
-function prettyJson(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    return text;
-  }
-}
-
 function isJsonMime(mime: string): boolean {
   return /json/i.test(mime);
+}
+
+function isImageMime(mime: string): boolean {
+  return /^image\//i.test(mime);
+}
+
+function isTextMime(mime: string): boolean {
+  const m = (mime || '').toLowerCase();
+  return (
+    m.startsWith('text/') ||
+    m.includes('json') ||
+    m.includes('xml') ||
+    m.includes('javascript') ||
+    m.includes('css') ||
+    m.includes('html') ||
+    m.includes('svg') ||
+    m === ''
+  );
+}
+
+function dataUrl(r: NetRequest): string {
+  const body = r.responseBody || '';
+  const mime = r.mimeType || 'application/octet-stream';
+  const enc = r.responseBodyEncoding || '';
+  if (enc === 'base64') return `data:${mime};base64,${body}`;
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(body)));
+    return `data:${mime};base64,${b64}`;
+  } catch {
+    return '';
+  }
 }
 
 function decodeBody(text: string, encoding: string): string {
@@ -273,19 +388,65 @@ function decodeBody(text: string, encoding: string): string {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      default: return '&#39;';
+    }
+  });
+}
+
+function highlightCode(text: string, lang: 'json' | 'js' | 'shell' | 'text'): string {
+  if (lang === 'text' || !text) return escapeHtml(text);
+  try {
+    const lines = highlightToLines(text, lang as 'json' | 'js' | 'shell');
+    return lines.join('\n');
+  } catch {
+    return escapeHtml(text);
+  }
+}
+
+function detectHighlightLang(mime: string, text: string): 'json' | 'js' | 'shell' | 'text' {
+  if (isJsonMime(mime)) return 'json';
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json';
+  return 'text';
+}
+
+function highlightBody(text: string, mime: string, format = false): string {
+  const lang = detectHighlightLang(mime, text);
+  if (lang === 'text') return escapeHtml(text);
+  let src = text;
+  if (format && lang === 'json') {
+    try {
+      src = JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      // keep raw
+    }
+  }
+  return highlightCode(src, lang);
+}
+
 const requests = ref<NetRequest[]>([]);
 const selectedId = ref<string | null>(null);
 const search = ref('');
-const methodFilter = ref('ALL');
-const activeTab = ref<'overview' | 'headers' | 'payload' | 'response' | 'timing'>('overview');
+const selectedMethods = ref<Set<string>>(new Set(['GET', 'POST']));
+const activeTab = ref<'overview' | 'headers' | 'payload' | 'response' | 'preview' | 'timing'>('overview');
 const bodyLoading = ref(false);
+
+const allMethods = ALL_METHODS;
 
 const selected = computed(() => requests.value.find((r) => r.id === selectedId.value) ?? null);
 
 const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase();
   return requests.value.filter((r) => {
-    if (methodFilter.value !== 'ALL' && r.method !== methodFilter.value) return false;
+    if (!selectedMethods.value.has(r.method)) return false;
+    if (!typeFilters.value.has('all') && !typeFilters.value.has(resourceTypeKey(r))) return false;
+    const q = search.value.trim().toLowerCase();
     if (!q) return true;
     return (
       r.url.toLowerCase().includes(q) ||
@@ -430,6 +591,26 @@ function clearAll(): void {
   selectedId.value = null;
 }
 
+function toggleType(key: string): void {
+  const next = new Set(typeFilters.value);
+  if (key === 'all') {
+    typeFilters.value = new Set(['all']);
+    return;
+  }
+  next.delete('all');
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  if (next.size === 0) next.add('all');
+  typeFilters.value = next;
+}
+
+function toggleMethod(m: string): void {
+  const next = new Set(selectedMethods.value);
+  if (next.has(m)) next.delete(m);
+  else next.add(m);
+  selectedMethods.value = next;
+}
+
 function exportPostman(selectedOnly: boolean): void {
   const list = selectedOnly && selected.value ? [selected.value] : filtered.value.length ? filtered.value : requests.value;
   const items = list.map((r) => {
@@ -560,31 +741,64 @@ function copyText(text: string): void {
   padding: 10px 16px;
   border-bottom: 1px solid var(--ni-border);
   background: linear-gradient(180deg, rgba(0, 220, 130, 0.06), transparent);
-  backdrop-filter: blur(8px);
 }
 
 .ni__brand {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   flex: none;
 }
 
 .ni__logo {
-  color: var(--ni-accent);
-  font-size: 16px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: none;
 }
 
-.ni__title {
+.ni__brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.ni__brand-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ni__name {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.ni__subtitle {
-  font-size: 11px;
-  color: var(--ni-faint);
+.ni__version {
   font-family: var(--ni-mono);
+  font-size: 10.5px;
+  color: var(--ni-faint);
+}
+
+.ni__sep {
+  color: var(--ni-faint);
+  font-size: 11px;
+}
+
+.ni__panel-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ni-accent);
+  letter-spacing: 0.02em;
+}
+
+.ni__author {
+  font-size: 10.5px;
+  color: var(--ni-faint);
+  line-height: 1.3;
 }
 
 .ni__controls {
@@ -594,11 +808,12 @@ function copyText(text: string): void {
   flex: 1;
   justify-content: flex-end;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .ni__search {
   flex: 1;
-  max-width: 360px;
+  max-width: 300px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--ni-border);
@@ -613,6 +828,38 @@ function copyText(text: string): void {
 .ni__search:focus {
   border-color: rgba(0, 220, 130, 0.5);
   box-shadow: 0 0 0 3px rgba(0, 220, 130, 0.12);
+}
+
+.ni__method-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.ni__method-chip {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--ni-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ni-muted);
+  font-family: var(--ni-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.ni__method-chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ni-text);
+}
+
+.ni__method-chip--active {
+  border-color: rgba(0, 220, 130, 0.4);
+  background: var(--ni-accent-soft);
+  color: var(--ni-accent);
 }
 
 .ni__select {
@@ -825,17 +1072,6 @@ function copyText(text: string): void {
   font-size: 12px;
 }
 
-.ni__empty {
-  padding: 48px 24px;
-  text-align: center;
-  color: var(--ni-muted);
-}
-
-.ni__empty-hint {
-  font-size: 12px;
-  color: var(--ni-faint);
-}
-
 .ni__detail {
   min-height: 0;
   display: flex;
@@ -1036,6 +1272,33 @@ function copyText(text: string): void {
   max-height: 60vh;
   overflow: auto;
 }
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.preview__img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: var(--ni-radius);
+  border: 1px solid var(--ni-border);
+  background: #fff;
+}
+
+/* syntax highlight tokens (reused from code viewer) */
+.code-block :deep(.oe-t-key) { color: #7dd3fc; }
+.code-block :deep(.oe-t-string) { color: #a5f3a0; }
+.code-block :deep(.oe-t-number) { color: #fbbf24; }
+.code-block :deep(.oe-t-literal) { color: #c084fc; }
+.code-block :deep(.oe-t-keyword) { color: #f472b6; }
+.code-block :deep(.oe-t-comment) { color: #6b7280; font-style: italic; }
+.code-block :deep(.oe-t-regex) { color: #f87171; }
+.code-block :deep(.oe-t-variable) { color: #93c5fd; }
+.code-block :deep(.oe-t-operator) { color: #94a3b8; }
 
 .timing {
   display: flex;
