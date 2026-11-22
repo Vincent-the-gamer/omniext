@@ -20,6 +20,7 @@
     "vue": "^3.5.46"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.7",
     "@types/node": "^26.6.6",
     "@wxt-dev/module-vue": "^1.0.3",
     "knip": "^6.47.0",
