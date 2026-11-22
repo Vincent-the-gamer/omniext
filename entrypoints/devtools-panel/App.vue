@@ -70,24 +70,46 @@
                 <button
                     class="ni__btn ni__btn--ghost"
                     type="button"
-                    @click="exportPostman(false)"
+                    :disabled="requests.length === 0"
+                    @click="exportAll"
                 >
                     {{ t("devtools-export-all") }}
                 </button>
-                <button
-                    class="ni__btn ni__btn--primary"
-                    type="button"
-                    :disabled="!selected"
-                    @click="exportPostman(true)"
-                >
-                    {{ t("devtools-send-postman") }}
-                </button>
+                <div class="ni__send">
+                    <TargetSelect
+                        v-model="exportTargetId"
+                        :targets="EXPORT_TARGETS"
+                        :label="t('devtools-send-target')"
+                    />
+                    <button
+                        class="ni__btn ni__btn--primary"
+                        type="button"
+                        :disabled="outgoing.length === 0"
+                        @click="sendSelected"
+                    >
+                        {{ sendLabel }}
+                    </button>
+                </div>
             </div>
         </header>
 
         <main class="ni__main">
             <section class="ni__list">
                 <div class="ni__list-head">
+                    <span class="col col--check">
+                        <input
+                            class="ni__check"
+                            type="checkbox"
+                            :checked="allFilteredChecked"
+                            :indeterminate="
+                                filteredCheckedCount > 0 && !allFilteredChecked
+                            "
+                            :disabled="filtered.length === 0"
+                            :title="t('devtools-select-all')"
+                            :aria-label="t('devtools-select-all')"
+                            @change="toggleSelectAllFiltered"
+                        />
+                    </span>
                     <span class="col col--method">{{
                         t("devtools-col-method")
                     }}</span>
@@ -108,14 +130,31 @@
                     }}</span>
                 </div>
                 <div class="ni__rows">
-                    <button
+                    <div
                         v-for="r in filtered"
                         :key="r.id"
                         class="ni__row"
-                        :class="{ 'ni__row--selected': r.id === selectedId }"
-                        type="button"
+                        :class="{
+                            'ni__row--selected': r.id === selectedId,
+                            'ni__row--checked': selectedIds.has(r.id),
+                        }"
+                        role="button"
+                        tabindex="0"
                         @click="selectRow(r.id)"
+                        @keydown.enter.prevent="selectRow(r.id)"
+                        @keydown.space.prevent="selectRow(r.id)"
                     >
+                        <span class="col col--check">
+                            <input
+                                class="ni__check"
+                                type="checkbox"
+                                :checked="selectedIds.has(r.id)"
+                                :title="t('devtools-select-request')"
+                                :aria-label="t('devtools-select-request')"
+                                @click.stop
+                                @change="toggleSelect(r.id)"
+                            />
+                        </span>
                         <span class="col col--method">
                             <span
                                 class="method"
@@ -145,7 +184,7 @@
                         <span class="col col--time">{{
                             formatTime(r.time)
                         }}</span>
-                    </button>
+                    </div>
                     <div v-if="filtered.length === 0" class="ni__empty">
                         <p>{{ t("devtools-empty") }}</p>
                         <p class="ni__empty-hint">
@@ -486,13 +525,20 @@
                         >
                             {{ t("devtools-copy-curl") }}
                         </button>
-                        <button
-                            class="ni__btn ni__btn--primary"
-                            type="button"
-                            @click="exportPostman(true)"
-                        >
-                            {{ t("devtools-send-postman") }}
-                        </button>
+                        <div class="ni__send">
+                            <TargetSelect
+                                v-model="exportTargetId"
+                                :targets="EXPORT_TARGETS"
+                                :label="t('devtools-send-target')"
+                            />
+                            <button
+                                class="ni__btn ni__btn--primary"
+                                type="button"
+                                @click="sendCurrent"
+                            >
+                                {{ t("devtools-send") }}
+                            </button>
+                        </div>
                     </footer>
                 </div>
                 <div v-else class="detail__placeholder">
@@ -511,6 +557,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
 import { useLocale } from "@/composables/use-locale";
 import { highlightToLines } from "@/features/code-viewer/highlight";
+import { EXPORT_TARGETS } from "./exporters";
+import TargetSelect from "./TargetSelect.vue";
 
 const { t } = useLocale();
 
@@ -732,12 +780,14 @@ function highlightBody(text: string, mime: string, format = false): string {
 
 const requests = ref<NetRequest[]>([]);
 const selectedId = ref<string | null>(null);
+const selectedIds = ref<Set<string>>(new Set());
 const search = ref("");
 const selectedMethods = ref<Set<string>>(new Set(["GET", "POST"]));
 const activeTab = ref<
     "overview" | "headers" | "payload" | "response" | "preview" | "timing"
 >("overview");
 const bodyLoading = ref(false);
+const exportTargetId = ref<string>(EXPORT_TARGETS[0]?.id ?? "");
 
 const TABS = [
     "overview",
@@ -776,6 +826,36 @@ const filtered = computed(() => {
         );
     });
 });
+
+const filteredCheckedCount = computed(() =>
+    filtered.value.reduce(
+        (count, r) => count + (selectedIds.value.has(r.id) ? 1 : 0),
+        0,
+    ),
+);
+
+const allFilteredChecked = computed(
+    () =>
+        filtered.value.length > 0 &&
+        filteredCheckedCount.value === filtered.value.length,
+);
+
+/**
+ * 发送按钮的请求：优先用勾选的多选；没有勾选时退回当前查看的请求，
+ * 保持“点一行再发送”的旧操作习惯。
+ */
+const outgoing = computed<NetRequest[]>(() => {
+    if (selectedIds.value.size) {
+        return requests.value.filter((r) => selectedIds.value.has(r.id));
+    }
+    return selected.value ? [selected.value] : [];
+});
+
+const sendLabel = computed(() =>
+    outgoing.value.length
+        ? t("devtools-send-count", { count: outgoing.value.length })
+        : t("devtools-send"),
+);
 
 const methods = computed(() => {
     const set = new Set(requests.value.map((r) => r.method));
@@ -876,9 +956,10 @@ function addRequest(raw: any, source: "har" | "live"): void {
 
     if (requests.value.length > 3000) {
         const removed = requests.value.splice(0, requests.value.length - 3000);
-        removed.forEach((r) =>
-            seen.delete(dedupKey(r.startedDateTime, r.url, r.method)),
-        );
+        removed.forEach((r) => {
+            seen.delete(dedupKey(r.startedDateTime, r.url, r.method));
+            selectedIds.value.delete(r.id);
+        });
     }
 }
 
@@ -931,6 +1012,7 @@ function clearAll(): void {
     seen.clear();
     pendingRaw.clear();
     selectedId.value = null;
+    selectedIds.value = new Set();
 }
 
 function toggleType(key: string): void {
@@ -953,74 +1035,55 @@ function toggleMethod(m: string): void {
     selectedMethods.value = next;
 }
 
-function exportPostman(selectedOnly: boolean): void {
-    const list =
-        selectedOnly && selected.value
-            ? [selected.value]
-            : filtered.value.length
-              ? filtered.value
-              : requests.value;
-    const items = list.map((r) => {
-        const headers = r.requestHeaders.map((h) => ({
-            key: h.name,
-            value: h.value,
-        }));
-        const body = r.requestBody
-            ? {
-                  mode: "raw",
-                  raw: r.requestBody,
-                  options: {
-                      raw: {
-                          language: isJsonMime(r.requestMimeType)
-                              ? "json"
-                              : "text",
-                      },
-                  },
-              }
-            : undefined;
+function toggleSelect(id: string): void {
+    const next = new Set(selectedIds.value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selectedIds.value = next;
+}
 
-        return {
-            name: `${r.method} ${(() => {
-                try {
-                    return new URL(r.url).pathname;
-                } catch {
-                    return r.url;
-                }
-            })()}`,
-            request: {
-                method: r.method,
-                header: headers,
-                url: r.url,
-                body,
-            },
-            response: [],
-        };
-    });
+/** 全选/取消全选当前筛选结果，不影响被过滤掉的请求。 */
+function toggleSelectAllFiltered(): void {
+    const next = new Set(selectedIds.value);
+    if (allFilteredChecked.value) {
+        filtered.value.forEach((r) => next.delete(r.id));
+    } else {
+        filtered.value.forEach((r) => next.add(r.id));
+    }
+    selectedIds.value = next;
+}
 
-    const collection = {
-        info: {
-            name:
-                selectedOnly && selected.value
-                    ? `Request: ${selected.value.method}`
-                    : "Omniext Network Capture",
-            schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-        },
-        item: items,
-    };
+/** 把一组请求按当前下拉框选中的软件导出为一个集合文件。 */
+function downloadExport(list: NetRequest[], filenameStem: string): void {
+    const target = EXPORT_TARGETS.find((t) => t.id === exportTargetId.value);
+    if (!target || !list.length) return;
 
-    const blob = new Blob([JSON.stringify(collection, null, 2)], {
-        type: "application/json",
-    });
+    const content = target.build(list, target.collectionName(list));
+    const blob = new Blob([content], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = selectedOnly
-        ? "request.postman_collection.json"
-        : "network-capture.postman_collection.json";
+    a.download = `${filenameStem}${target.filenameSuffix}`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+}
+
+/** 顶部的发送按钮：勾选的多选一起发，没勾选时发当前查看的请求。 */
+function sendSelected(): void {
+    downloadExport(outgoing.value, "network-capture");
+}
+
+/** 详情面板的发送按钮：只发当前查看的请求，文件单独命名。 */
+function sendCurrent(): void {
+    if (!selected.value) return;
+    downloadExport([selected.value], "request");
+}
+
+function exportAll(): void {
+    const list = filtered.value.length ? filtered.value : requests.value;
+    downloadExport(list, "network-capture");
 }
 
 function copyCurl(): void {
@@ -1280,15 +1343,23 @@ function copyText(text: string): void {
     color: var(--ni-accent);
 }
 
-.ni__select {
-    height: 30px;
-    padding: 0 8px;
-    border: 1px solid var(--ni-border);
-    border-radius: 8px;
-    background: var(--ni-surface);
-    color: var(--ni-text);
-    font-size: 12.5px;
+/* 下拉框 + 发送按钮：下拉框选目标软件，右边按钮发出。 */
+.ni__send {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ni__check {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--ni-accent);
     cursor: pointer;
+}
+
+.ni__check:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .ni__btn {
@@ -1343,6 +1414,16 @@ function copyText(text: string): void {
     color: var(--ni-text);
 }
 
+.ni__btn--ghost:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.ni__btn--ghost:disabled:hover {
+    background: transparent;
+    color: var(--ni-muted);
+}
+
 .ni__main {
     flex: 1;
     min-height: 0;
@@ -1362,7 +1443,7 @@ function copyText(text: string): void {
 .ni__list-head,
 .ni__row {
     display: grid;
-    grid-template-columns: 72px 64px minmax(0, 1fr) 96px 72px 72px;
+    grid-template-columns: 28px 72px 64px minmax(0, 1fr) 96px 72px 72px;
     gap: 8px;
     align-items: center;
     padding: 0 12px;
@@ -1398,15 +1479,32 @@ function copyText(text: string): void {
     cursor: pointer;
     transition: background 120ms ease;
     font-size: 12.5px;
+    outline: none;
+    user-select: none;
+}
+
+.ni__row:focus-visible {
+    box-shadow: inset 0 0 0 1px rgba(0, 220, 130, 0.45);
 }
 
 .ni__row:hover {
     background: rgba(255, 255, 255, 0.04);
 }
 
+.ni__row--checked {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .ni__row--selected {
     background: var(--ni-accent-soft);
     box-shadow: inset 2px 0 0 var(--ni-accent);
+}
+
+.col--check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
 }
 
 .col {
