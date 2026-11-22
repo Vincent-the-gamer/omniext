@@ -321,6 +321,17 @@
                                         <span class="header-value mono">{{
                                             h.value
                                         }}</span>
+                                        <button
+                                            class="header-copy"
+                                            type="button"
+                                            :title="t('devtools-copy-value')"
+                                            :aria-label="
+                                                t('devtools-copy-value')
+                                            "
+                                            @click="copyText(h.value)"
+                                        >
+                                            ⧉
+                                        </button>
                                     </div>
                                 </div>
                                 <p v-else class="muted">
@@ -344,6 +355,17 @@
                                         <span class="header-value mono">{{
                                             h.value
                                         }}</span>
+                                        <button
+                                            class="header-copy"
+                                            type="button"
+                                            :title="t('devtools-copy-value')"
+                                            :aria-label="
+                                                t('devtools-copy-value')
+                                            "
+                                            @click="copyText(h.value)"
+                                        >
+                                            ⧉
+                                        </button>
                                     </div>
                                 </div>
                                 <p v-else class="muted">
@@ -1744,11 +1766,45 @@ function copyText(text: string): void {
 
 .header-row {
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-columns: 200px minmax(0, 1fr) 22px;
     gap: 10px;
+    align-items: start;
     padding: 4px 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     font-size: 12px;
+}
+
+.header-copy {
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ni-faint);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        opacity 120ms ease,
+        color 120ms ease,
+        background 120ms ease;
+}
+
+.header-row:hover .header-copy,
+.header-copy:focus-visible {
+    opacity: 1;
+}
+
+.header-copy:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--ni-text);
+}
+
+.header-copy:focus-visible {
+    outline: 1px solid rgba(0, 220, 130, 0.5);
+    outline-offset: 1px;
 }
 
 .header-name {
@@ -1875,6 +1931,7 @@ function copyText(text: string): void {
 }
 
 .timing-bar-wrap {
+    display: block;
     height: 6px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.06);
@@ -1882,6 +1939,7 @@ function copyText(text: string): void {
 }
 
 .timing-bar {
+    display: block;
     height: 100%;
     background: linear-gradient(90deg, var(--ni-accent), #2fe89d);
     border-radius: 999px;

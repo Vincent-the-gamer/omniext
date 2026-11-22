@@ -183,6 +183,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'devtools-unknown': 'unknown',
     'devtools-no-timing': 'No timing data.',
     'devtools-copy-curl': 'Copy as cURL',
+    'devtools-copy-value': 'Copy value',
     'devtools-placeholder': 'Select a request to inspect its headers, payload and response.',
   },
   zh: {
@@ -337,6 +338,7 @@ const dictionary: Readonly<Record<Locale, Readonly<Record<string, string>>>> = {
     'devtools-unknown': '未知',
     'devtools-no-timing': '没有耗时数据。',
     'devtools-copy-curl': '复制为 cURL',
+    'devtools-copy-value': '复制值',
     'devtools-placeholder': '选择一个请求，查看它的请求头、请求体和响应。',
   },
 };
