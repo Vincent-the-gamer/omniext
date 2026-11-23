@@ -29,6 +29,16 @@
                     :placeholder="t('devtools-search-placeholder')"
                     spellcheck="false"
                 />
+                <span v-if="searchQuery && bodyQueued.size" class="ni__scan">
+                    <span class="ni__scan-dot"></span>
+                    {{ t("devtools-body-scan", { count: bodyQueued.size }) }}
+                </span>
+                <span
+                    v-else-if="searchQuery && bodyScanTruncated"
+                    class="ni__scan ni__scan--warn"
+                >
+                    {{ t("devtools-body-scan-partial") }}
+                </span>
                 <div class="ni__type-filter">
                     <button
                         v-for="filter in TYPE_FILTERS"
@@ -172,8 +182,23 @@
                             >
                         </span>
                         <span class="col col--url" :title="r.url">
-                            <span class="url-name">{{ urlName(r.url) }}</span>
-                            <span class="url-host">{{ urlHost(r.url) }}</span>
+                            <span class="url-line">
+                                <span
+                                    class="url-name"
+                                    v-html="
+                                        markText(urlName(r.url), searchQuery)
+                                    "
+                                ></span>
+                                <span
+                                    v-if="matchTags.get(r.id)"
+                                    class="url-tag"
+                                    >{{ matchTags.get(r.id) }}</span
+                                >
+                            </span>
+                            <span
+                                class="url-host"
+                                v-html="markText(urlHost(r.url), searchQuery)"
+                            ></span>
                         </span>
                         <span class="col col--type">{{
                             r.resourceType || mimeShort(r.mimeType)
@@ -206,9 +231,11 @@
                         >
                             {{ selected.method }}
                         </span>
-                        <span class="detail__url" :title="selected.url">{{
-                            selected.url
-                        }}</span>
+                        <span
+                            class="detail__url"
+                            :title="selected.url"
+                            v-html="markText(selected.url, searchQuery)"
+                        ></span>
                         <span
                             class="status status--lg"
                             :class="`status--${statusTone(selected.status)}`"
@@ -380,9 +407,12 @@
                                 <pre
                                     class="code-block"
                                     v-html="
-                                        highlightCode(
-                                            selected.queryString,
-                                            'text',
+                                        markInHtml(
+                                            highlightCode(
+                                                selected.queryString,
+                                                'text',
+                                            ),
+                                            searchQuery,
                                         )
                                     "
                                 ></pre>
@@ -410,6 +440,7 @@
                                             selected.requestBody,
                                             selected.requestMimeType,
                                             true,
+                                            searchQuery,
                                         )
                                     "
                                 ></pre>
@@ -450,6 +481,7 @@
                                             selected.responseBody,
                                             selected.mimeType,
                                             true,
+                                            searchQuery,
                                         )
                                     "
                                 ></pre>
@@ -481,6 +513,7 @@
                                                 selected.responseBody,
                                                 selected.mimeType,
                                                 true,
+                                                searchQuery,
                                             )
                                         "
                                     ></pre>
@@ -575,7 +608,7 @@
 <script setup lang="ts">
 /// <reference types="chrome" />
 
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
 import { useLocale } from "@/composables/use-locale";
 import { highlightToLines } from "@/features/code-viewer/highlight";
@@ -617,6 +650,8 @@ interface NetRequest {
     responseBodyEncoding: string;
     timings: Record<string, number>;
     bodyLoaded: boolean;
+    /** 正文检索已尝试读取过响应体，避免读取失败后反复重试。 */
+    bodyAttempted: boolean;
 }
 
 const METHOD_COLORS: Record<string, string> = {
@@ -763,6 +798,59 @@ function escapeHtml(text: string): string {
     });
 }
 
+/** 把一段已转义的纯文本里的关键词包上 <mark>。 */
+function markSegment(segment: string, needle: string): string {
+    if (!segment) return segment;
+    const haystack = segment.toLowerCase();
+    if (!haystack.includes(needle)) return segment;
+
+    let out = "";
+    let from = 0;
+    for (;;) {
+        const at = haystack.indexOf(needle, from);
+        if (at === -1) break;
+        out += segment.slice(from, at);
+        out += `<mark class="hl">${segment.slice(at, at + needle.length)}</mark>`;
+        from = at + needle.length;
+    }
+    return out + segment.slice(from);
+}
+
+/**
+ * 在语法高亮生成的 HTML 里标出关键词：只处理标签之间的文本，
+ * 不会破坏已有的 <span> 结构。关键词按转义后的形式匹配，
+ * 这样正文里的 `<`、`&` 等字符也能命中。
+ */
+function markInHtml(html: string, query: string): string {
+    if (!query) return html;
+    const needle = escapeHtml(query).toLowerCase();
+    if (!needle) return html;
+
+    let out = "";
+    let i = 0;
+    while (i < html.length) {
+        const open = html.indexOf("<", i);
+        if (open === -1) {
+            out += markSegment(html.slice(i), needle);
+            break;
+        }
+        out += markSegment(html.slice(i, open), needle);
+        const close = html.indexOf(">", open);
+        if (close === -1) {
+            out += html.slice(open);
+            break;
+        }
+        out += html.slice(open, close + 1);
+        i = close + 1;
+    }
+    return out;
+}
+
+/** 纯文本转义后再标出关键词，用于 URL 这类不参与语法高亮的位置。 */
+function markText(text: string, query: string): string {
+    return markInHtml(escapeHtml(text), query);
+}
+
 function highlightCode(
     text: string,
     lang: "json" | "js" | "shell" | "text",
@@ -786,9 +874,14 @@ function detectHighlightLang(
     return "text";
 }
 
-function highlightBody(text: string, mime: string, format = false): string {
+function highlightBody(
+    text: string,
+    mime: string,
+    format = false,
+    query = "",
+): string {
     const lang = detectHighlightLang(mime, text);
-    if (lang === "text") return escapeHtml(text);
+    if (lang === "text") return markInHtml(escapeHtml(text), query);
     let src = text;
     if (format && lang === "json") {
         try {
@@ -797,13 +890,98 @@ function highlightBody(text: string, mime: string, format = false): string {
             // keep raw
         }
     }
-    return highlightCode(src, lang);
+    return markInHtml(highlightCode(src, lang), query);
+}
+
+function decodeUrl(url: string): string {
+    try {
+        return decodeURIComponent(url);
+    } catch {
+        return url;
+    }
+}
+
+/** base64 编码的正文先解码再参与检索，解码失败时退回原文。 */
+function searchableText(text: string, encoding: string): string {
+    if (!text || encoding !== "base64") return text;
+    return decodeBody(text, encoding);
+}
+
+/**
+ * 小写正文缓存：关键词检索会随着每次输入重新计算，缓存可以避免对同一段
+ * 长正文重复解码、转小写。用 WeakMap 跟着请求对象一起释放。
+ */
+interface BodyTextCache {
+    requestKey: string;
+    requestText: string;
+    responseKey: string;
+    responseText: string;
+}
+
+let bodyTextCache = new WeakMap<NetRequest, BodyTextCache>();
+
+function lowerBody(r: NetRequest, kind: "request" | "response"): string {
+    const text = kind === "request" ? r.requestBody : r.responseBody;
+    const encoding =
+        kind === "request" ? r.requestBodyEncoding : r.responseBodyEncoding;
+    const key = `${encoding}|${text.length}`;
+
+    let cache = bodyTextCache.get(r);
+    if (!cache) {
+        cache = {
+            requestKey: "",
+            requestText: "",
+            responseKey: "",
+            responseText: "",
+        };
+        bodyTextCache.set(r, cache);
+    }
+
+    const cachedKey = kind === "request" ? cache.requestKey : cache.responseKey;
+    const cachedText =
+        kind === "request" ? cache.requestText : cache.responseText;
+    if (cachedKey === key) return cachedText;
+
+    const lower = searchableText(text, encoding).toLowerCase();
+    if (kind === "request") {
+        cache.requestKey = key;
+        cache.requestText = lower;
+    } else {
+        cache.responseKey = key;
+        cache.responseText = lower;
+    }
+    return lower;
+}
+
+/** URL、方法、状态、类型等元信息命中。 */
+function matchesMeta(r: NetRequest, q: string): boolean {
+    if (r.url.toLowerCase().includes(q)) return true;
+    const decoded = decodeUrl(r.url).toLowerCase();
+    if (decoded !== r.url.toLowerCase() && decoded.includes(q)) return true;
+    if (r.method.toLowerCase().includes(q)) return true;
+    if (String(r.status).includes(q)) return true;
+    return [r.statusText, r.mimeType, r.resourceType].some((v) =>
+        (v || "").toLowerCase().includes(q),
+    );
+}
+
+function matchesRequestBody(r: NetRequest, q: string): boolean {
+    return r.requestBody !== "" && lowerBody(r, "request").includes(q);
+}
+
+function matchesResponseBody(r: NetRequest, q: string): boolean {
+    return (
+        r.responseBody !== "" &&
+        isTextMime(r.mimeType) &&
+        lowerBody(r, "response").includes(q)
+    );
 }
 
 const requests = ref<NetRequest[]>([]);
 const selectedId = ref<string | null>(null);
 const selectedIds = ref<Set<string>>(new Set());
 const search = ref("");
+const searchQuery = computed(() => search.value.trim().toLowerCase());
 const selectedMethods = ref<Set<string>>(new Set(["GET", "POST"]));
 const activeTab = ref<
     "overview" | "headers" | "payload" | "response" | "preview" | "timing"
@@ -830,24 +1008,45 @@ const selected = computed(
     () => requests.value.find((r) => r.id === selectedId.value) ?? null,
 );
 
-const filtered = computed(() => {
-    return requests.value.filter((r) => {
-        if (!selectedMethods.value.has(r.method)) return false;
-        if (
-            !typeFilters.value.has("all") &&
-            !typeFilters.value.has(resourceTypeKey(r))
-        )
-            return false;
-        const q = search.value.trim().toLowerCase();
-        if (!q) return true;
-        return (
-            r.url.toLowerCase().includes(q) ||
-            r.method.toLowerCase().includes(q) ||
-            String(r.status).includes(q) ||
-            r.mimeType.toLowerCase().includes(q)
+/**
+ * 关键词筛选：先看 URL、方法、状态、类型等元信息，再看请求体与响应体。
+ * 响应体是懒加载的，未加载的请求会由 `pumpBodyPrefetch` 在后台补齐。
+ */
+const matchResult = computed(() => {
+    const q = searchQuery.value;
+    const allTypes = typeFilters.value.has("all");
+    const list: NetRequest[] = [];
+    const tags = new Map<string, string>();
+
+    for (const r of requests.value) {
+        if (!selectedMethods.value.has(r.method)) continue;
+        if (!allTypes && !typeFilters.value.has(resourceTypeKey(r))) continue;
+
+        if (!q || matchesMeta(r, q)) {
+            list.push(r);
+            continue;
+        }
+
+        const inRequest = matchesRequestBody(r, q);
+        const inResponse = matchesResponseBody(r, q);
+        if (!inRequest && !inResponse) continue;
+
+        list.push(r);
+        tags.set(
+            r.id,
+            inRequest && inResponse
+                ? t("devtools-match-both")
+                : inRequest
+                  ? t("devtools-match-request")
+                  : t("devtools-match-response"),
         );
-    });
+    }
+
+    return { list, tags };
 });
+
+const filtered = computed(() => matchResult.value.list);
+const matchTags = computed(() => matchResult.value.tags);
 
 const filteredCheckedCount = computed(() =>
     filtered.value.reduce(
@@ -960,6 +1159,7 @@ function makeRequest(raw: any, source: "har" | "live"): NetRequest {
         responseBodyEncoding,
         timings: raw?.timings ?? res?.timings ?? {},
         bodyLoaded: source === "har",
+        bodyAttempted: source === "har",
     };
 }
 
@@ -985,19 +1185,138 @@ function addRequest(raw: any, source: "har" | "live"): void {
     }
 }
 
+function applyBody(item: NetRequest, body: string, encoding: string): void {
+    item.responseBody = decodeBody(body ?? "", encoding ?? "");
+    item.responseBodyEncoding = encoding ?? "";
+    item.bodyLoaded = true;
+    item.bodyAttempted = true;
+}
+
 function loadBody(item: NetRequest, rawRequest: any): void {
-    if (item.bodyLoaded) return;
+    if (item.bodyLoaded || item.bodyAttempted) return;
     bodyLoading.value = true;
     try {
         rawRequest.getContent((body: string, encoding: string) => {
-            item.responseBody = decodeBody(body ?? "", encoding ?? "");
-            item.responseBodyEncoding = encoding ?? "";
-            item.bodyLoaded = true;
+            applyBody(item, body, encoding);
             bodyLoading.value = false;
         });
     } catch {
+        item.bodyAttempted = true;
         bodyLoading.value = false;
     }
+}
+
+/**
+ * 正文检索：响应体默认是懒加载的，搜索时在后台用 `getContent` 把候选
+ * 响应体读回来，读完再参与匹配。限并发、设总字数预算，避免长会话把内存吃满。
+ */
+const BODY_SCAN_CONCURRENCY = 6;
+const BODY_SCAN_CHAR_BUDGET = 32 * 1024 * 1024;
+/** 单条正文超过这个字节数就不参与检索，避免一个大文件拖垮面板。 */
+const BODY_SCAN_MAX_ITEM_BYTES = 4 * 1024 * 1024;
+const BODY_SCAN_DEBOUNCE = 220;
+
+const bodyQueued = reactive(new Set<string>());
+const bodyScanTruncated = ref(false);
+const bodyQueue: Array<{ item: NetRequest; raw: any }> = [];
+let bodyInFlight = 0;
+let bodyScannedChars = 0;
+let bodyScanTimer: ReturnType<typeof setTimeout> | undefined;
+
+function canScanBody(r: NetRequest): boolean {
+    if (r.bodyLoaded || r.bodyAttempted) return false;
+    if (bodyQueued.has(r.id)) return false;
+    if (!pendingRaw.has(r.id)) return false;
+    if (!isTextMime(r.mimeType)) return false;
+    if (r.size > BODY_SCAN_MAX_ITEM_BYTES) return false;
+    return true;
+}
+
+function pumpBodyScan(): void {
+    while (bodyInFlight < BODY_SCAN_CONCURRENCY && bodyQueue.length) {
+        if (bodyScannedChars >= BODY_SCAN_CHAR_BUDGET) {
+            bodyScanTruncated.value = true;
+            bodyQueue
+                .splice(0)
+                .forEach((job) => bodyQueued.delete(job.item.id));
+            return;
+        }
+
+        const job = bodyQueue.shift()!;
+        if (job.item.bodyLoaded || job.item.bodyAttempted) {
+            bodyQueued.delete(job.item.id);
+            continue;
+        }
+
+        bodyInFlight += 1;
+        let settled = false;
+        const finish = (): void => {
+            if (settled) return;
+            settled = true;
+            bodyInFlight -= 1;
+            bodyQueued.delete(job.item.id);
+            bodyScannedChars += job.item.responseBody.length;
+            pumpBodyScan();
+        };
+
+        try {
+            job.raw.getContent((body: string, encoding: string) => {
+                applyBody(job.item, body, encoding);
+                finish();
+            });
+        } catch {
+            job.item.bodyAttempted = true;
+            finish();
+        }
+    }
+}
+
+function enqueueBodyScan(): void {
+    const q = searchQuery.value;
+    if (!q || bodyScanTruncated.value) return;
+
+    const allTypes = typeFilters.value.has("all");
+    for (const r of requests.value) {
+        if (!selectedMethods.value.has(r.method)) continue;
+        if (!allTypes && !typeFilters.value.has(resourceTypeKey(r))) continue;
+        // 元信息已经命中的请求不用再读正文。
+        if (matchesMeta(r, q)) continue;
+        if (!canScanBody(r)) continue;
+
+        bodyQueued.add(r.id);
+        bodyQueue.push({ item: r, raw: pendingRaw.get(r.id) });
+    }
+
+    pumpBodyScan();
+}
+
+function scheduleBodyScan(): void {
+    if (bodyScanTimer) {
+        clearTimeout(bodyScanTimer);
+        bodyScanTimer = undefined;
+    }
+
+    if (!searchQuery.value) {
+        bodyQueue.splice(0).forEach((job) => bodyQueued.delete(job.item.id));
+        return;
+    }
+
+    bodyScanTimer = setTimeout(() => {
+        bodyScanTimer = undefined;
+        enqueueBodyScan();
+    }, BODY_SCAN_DEBOUNCE);
+}
+
+function resetBodyScan(): void {
+    if (bodyScanTimer) {
+        clearTimeout(bodyScanTimer);
+        bodyScanTimer = undefined;
+    }
+    bodyQueue.length = 0;
+    bodyQueued.clear();
+    bodyScanTruncated.value = false;
+    bodyScannedChars = 0;
+    bodyTextCache = new WeakMap();
 }
 
 const pendingRaw = new Map<string, any>();
@@ -1029,12 +1348,18 @@ watch(selected, (item) => {
     }
 });
 
+watch(
+    [searchQuery, () => requests.value.length, selectedMethods, typeFilters],
+    () => scheduleBodyScan(),
+);
+
 function clearAll(): void {
     requests.value = [];
     seen.clear();
     pendingRaw.clear();
     selectedId.value = null;
     selectedIds.value = new Set();
+    resetBodyScan();
 }
 
 function toggleType(key: string): void {
@@ -1295,6 +1620,48 @@ function copyText(text: string): void {
     box-shadow: 0 0 0 3px rgba(0, 220, 130, 0.12);
 }
 
+.ni__scan {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid rgba(0, 220, 130, 0.25);
+    border-radius: 999px;
+    background: var(--ni-accent-soft);
+    color: var(--ni-accent);
+    font-family: var(--ni-mono);
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.ni__scan--warn {
+    border-color: rgba(252, 161, 48, 0.3);
+    background: rgba(252, 161, 48, 0.1);
+    color: var(--ni-warn);
+}
+
+.ni__scan-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: ni-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ni-pulse {
+    0%,
+    100% {
+        opacity: 0.25;
+        transform: scale(0.8);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
 .ni__type-filter {
     display: flex;
     flex-wrap: wrap;
@@ -1552,9 +1919,32 @@ function copyText(text: string): void {
     line-height: 1.2;
 }
 
+.url-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
 .url-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 500;
     color: var(--ni-text);
+}
+
+.url-tag {
+    flex: none;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(0, 220, 130, 0.1);
+    color: var(--ni-accent);
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 0.02em;
 }
 
 .url-host {
@@ -1863,6 +2253,18 @@ function copyText(text: string): void {
     word-break: break-word;
     max-height: 60vh;
     overflow: auto;
+}
+
+/* 关键词高亮：v-html 插入的内容不在 scoped 作用域内，需要用 :deep。 */
+.code-block :deep(mark.hl),
+.detail__url :deep(mark.hl),
+.url-name :deep(mark.hl),
+.url-host :deep(mark.hl) {
+    padding: 0 1px;
+    border-radius: 2px;
+    background: rgba(252, 161, 48, 0.32);
+    color: #ffe2b8;
+    font-weight: inherit;
 }
 
 .preview {

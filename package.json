@@ -1,6 +1,6 @@
 {
   "name": "omniext",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "author": "Vincent-the-gamer",
   "private": true,
   "description": "Omnipotent browser extension.",
@@ -23,7 +23,7 @@
     "@types/chrome": "^0.3.7",
     "@types/node": "^26.6.6",
     "@wxt-dev/module-vue": "^1.0.3",
-    "knip": "^6.47.0",
+    "knip": "^6.48.0",
     "taze": "^21.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
