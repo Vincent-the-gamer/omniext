@@ -15,9 +15,9 @@ apply browser-wide.
 
 ## Features
 
-- **Unlock copy restrictions** — restores selecting, copying and right-clicking on sites that block them.
-- **Code viewer** — pretty-prints JSON pages and highlights JavaScript, TypeScript and shell scripts opened as plain text, all in one layout.
-- **Bilibili direct download** — adds a download entry to Bilibili video pages that lists the direct video and audio links for the page you are on.
+- **Unlock Copy Restrictions** — restores selecting, copying and right-clicking on sites that block them.
+- **Code Viewer** — pretty-prints JSON pages and highlights JavaScript, TypeScript and shell scripts opened as plain text, all in one layout.
+- **Bilibili Direct Download** — adds a download entry to Bilibili video pages that lists the direct video and audio links for the page you are on.
 - **WebRTC Network Limiter** — sets Chrome's WebRTC IP policy so a site cannot read your real or local IP.
 - **GitHub Folder Download** - download any sub-folder of GitHub repository.
 - **Network Inspector** - Add card into devtool, providing send request to Postman. 
