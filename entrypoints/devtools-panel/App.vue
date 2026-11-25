@@ -256,6 +256,9 @@
                             @click="activeTab = tab.key"
                         >
                             {{ tab.label }}
+                            <span v-if="tab.count" class="detail__tab-count">{{
+                                matchBadge(tab.count)
+                            }}</span>
                         </button>
                     </nav>
 
@@ -404,18 +407,20 @@
                                 class="header-section"
                             >
                                 <h3>{{ t("devtools-query-string") }}</h3>
-                                <pre
-                                    class="code-block"
-                                    v-html="
-                                        markInHtml(
-                                            highlightCode(
-                                                selected.queryString,
-                                                'text',
-                                            ),
-                                            searchQuery,
-                                        )
-                                    "
-                                ></pre>
+                                <CodeFrame :query="searchQuery">
+                                    <pre
+                                        class="code-block"
+                                        v-html="
+                                            markInHtml(
+                                                highlightCode(
+                                                    selected.queryString,
+                                                    'text',
+                                                ),
+                                                searchQuery,
+                                            )
+                                        "
+                                    ></pre>
+                                </CodeFrame>
                             </div>
                         </template>
 
@@ -433,17 +438,19 @@
                                         {{ t("viewer-copy") }}
                                     </button>
                                 </div>
-                                <pre
-                                    class="code-block"
-                                    v-html="
-                                        highlightBody(
-                                            selected.requestBody,
-                                            selected.requestMimeType,
-                                            true,
-                                            searchQuery,
-                                        )
-                                    "
-                                ></pre>
+                                <CodeFrame :query="searchQuery">
+                                    <pre
+                                        class="code-block"
+                                        v-html="
+                                            highlightBody(
+                                                selected.requestBody,
+                                                selected.requestMimeType,
+                                                true,
+                                                searchQuery,
+                                            )
+                                        "
+                                    ></pre>
+                                </CodeFrame>
                             </div>
                             <p v-else class="muted">
                                 {{ t("devtools-no-request-body") }}
@@ -474,17 +481,19 @@
                                         {{ t("viewer-copy") }}
                                     </button>
                                 </div>
-                                <pre
-                                    class="code-block"
-                                    v-html="
-                                        highlightBody(
-                                            selected.responseBody,
-                                            selected.mimeType,
-                                            true,
-                                            searchQuery,
-                                        )
-                                    "
-                                ></pre>
+                                <CodeFrame :query="searchQuery">
+                                    <pre
+                                        class="code-block"
+                                        v-html="
+                                            highlightBody(
+                                                selected.responseBody,
+                                                selected.mimeType,
+                                                true,
+                                                searchQuery,
+                                            )
+                                        "
+                                    ></pre>
+                                </CodeFrame>
                             </div>
                             <p v-else class="muted">
                                 {{ t("devtools-no-response-body") }}
@@ -506,17 +515,19 @@
                                         selected.responseBody
                                     "
                                 >
-                                    <pre
-                                        class="code-block"
-                                        v-html="
-                                            highlightBody(
-                                                selected.responseBody,
-                                                selected.mimeType,
-                                                true,
-                                                searchQuery,
-                                            )
-                                        "
-                                    ></pre>
+                                    <CodeFrame :query="searchQuery">
+                                        <pre
+                                            class="code-block"
+                                            v-html="
+                                                highlightBody(
+                                                    selected.responseBody,
+                                                    selected.mimeType,
+                                                    true,
+                                                    searchQuery,
+                                                )
+                                            "
+                                        ></pre>
+                                    </CodeFrame>
                                 </template>
                                 <template v-else-if="selected.responseBody">
                                     <p class="muted">
@@ -613,6 +624,7 @@ import { APP_AUTHOR, APP_VERSION } from "@/utils/app";
 import { useLocale } from "@/composables/use-locale";
 import { highlightToLines } from "@/features/code-viewer/highlight";
 import { EXPORT_TARGETS } from "./exporters";
+import CodeFrame from "./CodeFrame.vue";
 import TargetSelect from "./TargetSelect.vue";
 
 const { t } = useLocale();
@@ -798,22 +810,82 @@ function escapeHtml(text: string): string {
     });
 }
 
-/** 把一段已转义的纯文本里的关键词包上 <mark>。 */
+/** `escapeHtml` 只会产出这几种实体，命中切进实体内部就会把转义拆坏。 */
+const HTML_ENTITY = /&(?:amp|lt|gt|quot|#39);/g;
+
+interface EntityRange {
+    start: number;
+    end: number;
+}
+
+function entityRanges(text: string): EntityRange[] {
+    const ranges: EntityRange[] = [];
+
+    for (const match of text.matchAll(HTML_ENTITY)) {
+        const start = match.index ?? 0;
+        ranges.push({ start, end: start + match[0].length });
+    }
+
+    return ranges;
+}
+
+/**
+ * 把一段已转义的纯文本里的关键词包上 <mark>。
+ *
+ * 文本里的 `"`、`&`、`<` 已经变成 `&quot;`、`&amp;`、`&lt;` 这类实体。
+ * 如果命中正好切进实体中间（例如关键词是 `o`，而实体是 `&quot;`），
+ * 插入的 `<mark>` 会把实体拆成 `&qu<mark>o</mark>t;`，浏览器只好把
+ * `&quot;` 当成普通文本渲染——正文里就会突然出现一堆 `&quot;`。
+ * 因此只接受“完全落在实体之外”或“完整包住整个实体”的命中，
+ * 其它位置跳过。
+ */
 function markSegment(segment: string, needle: string): string {
     if (!segment) return segment;
     const haystack = segment.toLowerCase();
     if (!haystack.includes(needle)) return segment;
 
+    const entities = entityRanges(segment);
+    let entityIndex = 0;
+    let copyFrom = 0;
+    let searchFrom = 0;
     let out = "";
-    let from = 0;
+
     for (;;) {
-        const at = haystack.indexOf(needle, from);
+        const at = haystack.indexOf(needle, searchFrom);
         if (at === -1) break;
-        out += segment.slice(from, at);
-        out += `<mark class="hl">${segment.slice(at, at + needle.length)}</mark>`;
-        from = at + needle.length;
+
+        const end = at + needle.length;
+
+        while (
+            entityIndex < entities.length &&
+            entities[entityIndex]!.end <= at
+        ) {
+            entityIndex += 1;
+        }
+
+        let broken = false;
+        for (let index = entityIndex; index < entities.length; index += 1) {
+            const entity = entities[index]!;
+            if (entity.start >= end) break;
+            if (at > entity.start || end < entity.end) {
+                broken = true;
+                break;
+            }
+        }
+
+        if (broken) {
+            // 落在实体内部，往后挪一格继续找；已复制的文本不受影响。
+            searchFrom = at + 1;
+            continue;
+        }
+
+        out += segment.slice(copyFrom, at);
+        out += `<mark class="hl">${segment.slice(at, end)}</mark>`;
+        copyFrom = end;
+        searchFrom = end;
     }
-    return out + segment.slice(from);
+
+    return out + segment.slice(copyFrom);
 }
 
 /**
@@ -999,7 +1071,16 @@ const TABS = [
 ] as const;
 
 const tabs = computed(() =>
-    TABS.map((key) => ({ key, label: t(`devtools-tab-${key}`) })),
+    TABS.map((key) => ({
+        key,
+        label: t(`devtools-tab-${key}`),
+        count:
+            key === "payload"
+                ? bodyMatchCounts.value.payload
+                : key === "response"
+                  ? bodyMatchCounts.value.response
+                  : 0,
+    })),
 );
 
 const allMethods = ALL_METHODS;
@@ -1007,6 +1088,39 @@ const allMethods = ALL_METHODS;
 const selected = computed(
     () => requests.value.find((r) => r.id === selectedId.value) ?? null,
 );
+
+function countOccurrences(text: string, needle: string): number {
+    if (!text || !needle) return 0;
+
+    const haystack = text.toLowerCase();
+    let count = 0;
+    let from = 0;
+
+    for (;;) {
+        const at = haystack.indexOf(needle, from);
+        if (at === -1) return count;
+        count += 1;
+        from = at + needle.length;
+    }
+}
+
+/** 当前请求在「请求体 / 响应」里各自的命中数，用于标签页角标。 */
+const bodyMatchCounts = computed(() => {
+    const item = selected.value;
+    const q = searchQuery.value;
+    if (!item || !q) return { payload: 0, response: 0 };
+
+    return {
+        payload: countOccurrences(item.requestBody, q),
+        response: isTextMime(item.mimeType)
+            ? countOccurrences(item.responseBody, q)
+            : 0,
+    };
+});
+
+function matchBadge(count: number): string {
+    return count > 999 ? "999+" : String(count);
+}
 
 /**
  * 关键词筛选：先看 URL、方法、状态、类型等元信息，再看请求体与响应体。
@@ -2089,6 +2203,20 @@ function copyText(text: string): void {
     box-shadow: inset 0 -1px 0 var(--ni-bg);
 }
 
+/* 标签页上的正文命中数，提示关键词在哪个标签里。 */
+.detail__tab-count {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: rgba(252, 161, 48, 0.22);
+    color: #ffcf9a;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    vertical-align: 1px;
+}
+
 .detail__body {
     flex: 1;
     min-height: 0;
@@ -2265,6 +2393,13 @@ function copyText(text: string): void {
     background: rgba(252, 161, 48, 0.32);
     color: #ffe2b8;
     font-weight: inherit;
+}
+
+/* 当前跳转到的命中：比其余命中更亮，方便在正文里定位。 */
+.code-block :deep(mark.hl--active) {
+    background: rgba(252, 161, 48, 0.82);
+    color: #22180a;
+    box-shadow: 0 0 0 1px rgba(255, 208, 150, 0.9);
 }
 
 .preview {
